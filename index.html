@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ScriptAbility - Pharmacy Apps Hub</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
@@ -26,6 +26,7 @@
                 <a href="#features" class="nav-link">Features</a>
                 <a href="#testimonials" class="nav-link">Testimonials</a>
                 <a href="#contact" class="nav-link">Contact</a>
+                <a href="sandbox.html" target="_blank" rel="noopener" class="nav-link">Sandbox</a>
             </nav>
             <div class="header-actions">
                 <button class="demo-btn">Request Demo</button>
@@ -103,15 +104,7 @@
                                     <span class="product-category">Patient Care</span>
                                 </div>
                             </div>
-                            <div class="shelf-item">
-                                <div class="product-icon">
-                                    <i class="fas fa-language"></i>
-                                </div>
-                                <div class="product-info">
-                                    <h4>Live Translator</h4>
-                                    <span class="product-category">Patient Care</span>
-                                </div>
-                            </div>
+                            
                             <div class="shelf-item">
                                 <div class="product-icon">
                                     <i class="fas fa-chart-bar"></i>
@@ -146,7 +139,6 @@
                 <button class="category-tab" data-category="management">Management</button>
                 <button class="category-tab" data-category="analytics">Analytics</button>
                 <button class="category-tab" data-category="patient">Patient Care</button>
-                <button class="category-tab" data-category="security">Security</button>
             </div>
         </section>
 
@@ -215,24 +207,7 @@
 
 
 
-            <!-- App 10 - Live Translator -->
-            <div class="app-card" data-category="patient">
-                <div class="app-icon">
-                    <i class="fas fa-language"></i>
-                </div>
-                <div class="app-info">
-                    <h3 class="app-name">Live Translator</h3>
-                    <p class="app-description">Real-time language translation</p>
-                    <div class="app-status">
-                        <span class="status-badge active">Active</span>
-                    </div>
-                </div>
-                <div class="app-actions">
-                    <button class="app-launch-btn">
-                        <i class="fas fa-play"></i>
-                    </button>
-                </div>
-            </div>
+            
 
             <!-- App 11 - NDC Analysis -->
             <div class="app-card" data-category="analytics">
@@ -322,9 +297,7 @@
                         </div>
                     </div>
                     <div class="testimonial-card">
-                        <div class="testimonial-content">
-                            <p>"The Live Translator feature has been a game-changer for our diverse patient population. Highly recommended!"</p>
-                        </div>
+                        
                         <div class="testimonial-author">
                             <div class="author-info">
                                 <h4>Mike Chen</h4>
@@ -369,7 +342,7 @@
                     <p>Join hundreds of pharmacies already using ScriptAbility to streamline operations and improve patient care.</p>
                     <div class="cta-actions">
                         <button class="btn btn-primary btn-large">Request Free Demo</button>
-                        <button class="btn btn-secondary btn-large">Download Brochure</button>
+                    <a id="download-brochure-btn" class="btn btn-secondary btn-large" href="assets/ScriptAbility-Patient-Access-Stack-Brochure.pdf" download>Download Brochure</a>
                     </div>
                 </div>
             </div>
@@ -442,11 +415,12 @@
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2024 ScriptAbility. All rights reserved.</p>
+                <p>&copy; 2025 ScriptAbility. All rights reserved.</p>
             </div>
         </div>
     </footer>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

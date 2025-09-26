@@ -1,0 +1,1 @@
+Place your finalized brochure PDF here as:\n\nScriptAbility-Patient-Access-Stack-Brochure.pdf\n\nThe "Download Brochure" button will directly download this file when present. If the file is missing, the site will dynamically generate a PDF from the current page content instead.

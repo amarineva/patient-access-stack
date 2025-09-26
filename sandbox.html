@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sandbox – ScriptAbility</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header class="showroom-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <div class="logo-icon">
+                    <i class="fas fa-pills"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>ScriptAbility</h1>
+                    <p>Pharmacy Software Solutions</p>
+                </div>
+            </div>
+            <nav class="main-nav">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="#sig" class="nav-link">SIG Normalizer</a>
+            </nav>
+            <div class="header-actions">
+                <button class="demo-btn" onclick="window.location.href='index.html'">Back to Site</button>
+                <button class="menu-btn">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main style="padding-top: 100px;">
+        <section class="app-showcase" id="sig">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">Sandbox</h2>
+                    <p class="section-subtitle">Test our APIs with your own keys and configuration.</p>
+                </div>
+
+                <div class="sandbox-panel">
+                    <div class="sandbox-config">
+                        <div class="form-group">
+                            <label for="productSelect" class="sandbox-label">Product</label>
+                            <select id="productSelect" class="sandbox-input">
+                                <option value="sig-normalizer">SIG Normalizer</option>
+                                <option value="ndc-analysis">NDC Analysis</option>
+                                <option value="medcast">Medcast (Podcast Generator)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="apiKeyGroup">
+                            <label for="apiKey" class="sandbox-label">OpenAI API Key</label>
+                            <input id="apiKey" class="sandbox-input" type="password" placeholder="sk-..." autocomplete="off">
+                            <div class="sandbox-hint">Stored only in your browser (localStorage). Not sent until you run.</div>
+                        </div>
+                        <div class="form-group" id="medcastBaseUrlGroup" style="display:none">
+                            <label for="medcastBaseUrl" class="sandbox-label">Medcast Base URL</label>
+                            <input id="medcastBaseUrl" class="sandbox-input" type="text" placeholder="https://medcast.scriptability.net" autocomplete="off">
+                            <div class="sandbox-hint">Default: https://medcast.scriptability.net</div>
+                        </div>
+                        
+                    </div>
+
+                    <div>
+                        <div class="sandbox-grid" data-product="sig-normalizer">
+                            <div class="sandbox-runner">
+                                <div class="form-group">
+                                    <label for="sigInput" class="sandbox-label">Pharmacy Instruction (SIG)</label>
+                                    <textarea id="sigInput" class="sandbox-textarea" rows="5" placeholder="1 tab po bid" maxlength="200"></textarea>
+                                    <div class="sandbox-hint">Max 200 characters.</div>
+                                </div>
+                                <div class="sandbox-actions">
+                                    <button id="saveConfigBtn" class="btn btn-secondary">Save Config</button>
+                                    <button id="runSigBtn" class="btn btn-primary"><i class="fas fa-play"></i> Run</button>
+                                </div>
+
+                                <div class="sandbox-output">
+                                    <div class="output-header">
+                                        <h3>Response</h3>
+                                        <div class="output-actions">
+                                            <button id="copyOutputSigBtn" class="btn btn-secondary"><i class="fas fa-copy"></i> Copy</button>
+                                        </div>
+                                    </div>
+                                    <pre id="outputSig" class="sandbox-pre"></pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sandbox-grid" data-product="ndc-analysis" style="display:none">
+                            <div class="sandbox-runner">
+                                <div class="form-group">
+                                    <label for="ndcInput" class="sandbox-label">NDC (10-digit with hyphens or 11-digit no hyphens)</label>
+                                    <input id="ndcInput" class="sandbox-input" type="text" inputmode="numeric" pattern="[0-9\-]*" placeholder="e.g., 12345-6789-0 or 01234567890" autocomplete="off" />
+                                </div>
+                                <div class="sandbox-actions">
+                                    <button id="runNdcBtn" class="btn btn-primary"><i class="fas fa-play"></i> Run</button>
+                                </div>
+
+                                <div class="sandbox-output">
+                                    <div class="output-header">
+                                        <h3>Response</h3>
+                                        <div class="output-actions">
+                                            <button id="copyOutputNdcBtn" class="btn btn-secondary"><i class="fas fa-copy"></i> Copy</button>
+                                        </div>
+                                    </div>
+                                    <pre id="outputNdc" class="sandbox-pre"></pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sandbox-grid" data-product="medcast" style="display:none">
+                            <div class="sandbox-runner">
+                                <div class="form-group">
+                                    <label for="medcastFiles" class="sandbox-label">Attach files (optional)</label>
+                                    <input id="medcastFiles" class="sandbox-input" type="file" multiple accept=".txt,.md,.pdf,.docx" />
+                                    <div class="sandbox-hint">Up to 10 files. Allowed: .txt, .md, .pdf, .docx. Max 5MB each, 10MB total.</div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="medcastText" class="sandbox-label">Additional context (optional)</label>
+                                    <textarea id="medcastText" class="sandbox-textarea" rows="5" placeholder="Paste text to include in the podcast script..."></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="medcastNdc" class="sandbox-label">NDC number (optional)</label>
+                                    <input id="medcastNdc" class="sandbox-input" type="text" inputmode="numeric" pattern="[0-9\-]*" placeholder="e.g., 65862-523-01 or 65862052301" autocomplete="off" />
+                                    <div class="sandbox-hint">If provided, prescription context is prepended automatically.</div>
+                                </div>
+
+                                <div class="sandbox-actions">
+                                    <button id="runMedcastBtn" class="btn btn-primary"><i class="fas fa-podcast"></i> Generate Podcast</button>
+                                </div>
+
+                                <div class="sandbox-output">
+                                    <div class="output-header">
+                                        <h3>Status</h3>
+                                    </div>
+                                    <pre id="outputMedcast" class="sandbox-pre"></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sandbox-footnote">
+                    <p>This tool calls OpenAI's Responses API with your API key. For production, use server-side keys and environment isolation.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="sandbox.js"></script>
+</body>
+</html>
+

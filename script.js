@@ -18,7 +18,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const cardCategory = card.getAttribute('data-category');
                 
                 if (category === 'all' || cardCategory === category) {
-                    card.style.display = 'flex';
+                    // Restore default CSS layout (grid) rather than forcing flex
+                    card.style.display = 'grid';
                     card.style.animation = 'slideInUp 0.6s ease-out';
                 } else {
                     card.style.display = 'none';
@@ -34,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
             e.stopPropagation();
             const appCard = this.closest('.app-card');
             const appName = appCard.querySelector('.app-name').textContent;
+            const isSig = appName.toLowerCase().includes('sig normalizer');
             
             // Add loading state
             this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -41,7 +43,11 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Simulate app launch
             setTimeout(() => {
-                showNotification(`Launching ${appName}...`, 'success');
+                if (isSig) {
+                    window.open('sandbox.html?product=sig-normalizer', '_blank', 'noopener');
+                } else {
+                    showNotification(`Launching ${appName}...`, 'success');
+                }
                 this.innerHTML = '<i class="fas fa-play"></i>';
                 this.disabled = false;
             }, 1500);
@@ -79,6 +85,164 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (menuBtn) {
         menuBtn.addEventListener('click', showMenuModal);
+    }
+
+    // Download Brochure - generate PDF from page content
+    const brochureBtn = document.getElementById('download-brochure-btn');
+    if (brochureBtn) {
+        brochureBtn.addEventListener('click', async function(e) {
+            try {
+                // If static PDF exists and link works, let the default navigate/download happen
+                // We'll attempt a HEAD request to confirm availability. If it fails, prevent default and generate.
+                const href = brochureBtn.getAttribute('href');
+                let staticOk = false;
+                if (href) {
+                    try {
+                        const res = await fetch(href, { method: 'HEAD', cache: 'no-store' });
+                        staticOk = res.ok && (res.headers.get('content-type') || '').includes('pdf');
+                    } catch (_) {
+                        staticOk = false;
+                    }
+                }
+
+                if (staticOk) {
+                    // allow default browser download
+                    return;
+                }
+
+                // No static file found; fall back to dynamic generation
+                e.preventDefault();
+                // Build brochure content container
+                const brochure = document.createElement('div');
+                brochure.style.cssText = `
+                    font-family: 'Montserrat', 'Open Sans', Arial, sans-serif;
+                    color: #0f172a;
+                    padding: 24px;
+                    max-width: 900px;
+                `;
+
+                // Header
+                const heroTitle = document.querySelector('.hero-title')?.textContent?.trim() || 'ScriptAbility Patient Access Stack';
+                const heroSubtitle = document.querySelector('.hero-subtitle')?.textContent?.trim() || '';
+                brochure.appendChild(htmlToElement(`
+                    <div style="text-align:center; margin-bottom: 16px;">
+                        <div style="font-size: 28px; font-weight: 800; color:#00325b;">${escapeHtml(heroTitle)}</div>
+                        <div style="margin-top: 8px; font-size: 14px; color:#475569; line-height:1.6;">${escapeHtml(heroSubtitle)}</div>
+                    </div>
+                `));
+
+                // Key stats
+                const stats = Array.from(document.querySelectorAll('.hero-stats .stat')).map(s => ({
+                    number: s.querySelector('.stat-number')?.textContent?.trim() || '',
+                    label: s.querySelector('.stat-label')?.textContent?.trim() || ''
+                }));
+                if (stats.length) {
+                    brochure.appendChild(htmlToElement(`
+                        <div style="display:flex; gap:16px; justify-content:center; margin: 8px 0 16px 0;">
+                            ${stats.map(st => `
+                                <div style="text-align:center;">
+                                    <div style="font-size:22px; font-weight:800; color:#f59e0b;">${escapeHtml(st.number)}</div>
+                                    <div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.04em;">${escapeHtml(st.label)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `));
+                }
+
+                // Applications
+                brochure.appendChild(htmlToElement(`<div style="font-size:18px; font-weight:800; color:#00325b; margin: 16px 0 8px 0;">Our Application Suite</div>`));
+                const appCards = Array.from(document.querySelectorAll('.apps-grid .app-card')).map(card => ({
+                    name: card.querySelector('.app-name')?.textContent?.trim() || '',
+                    description: card.querySelector('.app-description')?.textContent?.trim() || '',
+                    category: card.getAttribute('data-category') || ''
+                }));
+                if (appCards.length) {
+                    brochure.appendChild(htmlToElement(`
+                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align:left; border-bottom:1px solid #e2e8f0; padding:8px;">App</th>
+                                    <th style="text-align:left; border-bottom:1px solid #e2e8f0; padding:8px;">Description</th>
+                                    <th style="text-align:left; border-bottom:1px solid #e2e8f0; padding:8px;">Category</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${appCards.map(app => `
+                                    <tr>
+                                        <td style="padding:8px; border-bottom:1px solid #f1f5f9; font-weight:600; color:#0f172a;">${escapeHtml(app.name)}</td>
+                                        <td style="padding:8px; border-bottom:1px solid #f1f5f9; color:#475569;">${escapeHtml(app.description)}</td>
+                                        <td style="padding:8px; border-bottom:1px solid #f1f5f9; color:#0ea5e9; text-transform:capitalize;">${escapeHtml(app.category)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `));
+                }
+
+                // Features
+                brochure.appendChild(htmlToElement(`<div style="font-size:18px; font-weight:800; color:#00325b; margin: 16px 0 8px 0;">Why Choose ScriptAbility?</div>`));
+                const features = Array.from(document.querySelectorAll('#features .feature-card')).map(card => ({
+                    title: card.querySelector('h3')?.textContent?.trim() || '',
+                    text: card.querySelector('p')?.textContent?.trim() || ''
+                }));
+                if (features.length) {
+                    brochure.appendChild(htmlToElement(`
+                        <ul style="margin:0 0 8px 16px; padding:0; font-size:12px; color:#334155;">
+                            ${features.map(f => `
+                                <li style="margin: 0 0 6px 0;">
+                                    <span style="font-weight:700; color:#0f172a;">${escapeHtml(f.title)}</span>
+                                    <span style="margin-left:6px; color:#475569;">${escapeHtml(f.text)}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    `));
+                }
+
+                // Testimonials (quotes only)
+                const quotes = Array.from(document.querySelectorAll('.testimonial-card .testimonial-content p'))
+                    .map(p => p.textContent?.trim()).filter(Boolean);
+                if (quotes.length) {
+                    brochure.appendChild(htmlToElement(`<div style="font-size:14px; font-weight:800; color:#00325b; margin: 12px 0 6px 0;">What Our Customers Say</div>`));
+                    brochure.appendChild(htmlToElement(`
+                        <div style="display:flex; flex-direction:column; gap:6px;">
+                            ${quotes.map(q => `<div style=\"font-style:italic; color:#334155; font-size:12px;\">“${escapeHtml(q)}”</div>`).join('')}
+                        </div>
+                    `));
+                }
+
+                // Contact
+                const phone = document.querySelector('.contact-item i.fa-phone')?.parentElement?.querySelector('p')?.textContent?.trim() || '';
+                const email = document.querySelector('.contact-item i.fa-envelope')?.parentElement?.querySelector('p')?.textContent?.trim() || '';
+                brochure.appendChild(htmlToElement(`
+                    <div style="margin-top: 16px; padding-top: 8px; border-top:1px solid #e2e8f0; font-size:12px; color:#334155;">
+                        <div><strong>Contact</strong></div>
+                        ${phone ? `<div>Phone: ${escapeHtml(phone)}</div>` : ''}
+                        ${email ? `<div>Email: ${escapeHtml(email)}</div>` : ''}
+                        <div style="margin-top:6px; color:#64748b;">© 2025 ScriptAbility. All rights reserved.</div>
+                    </div>
+                `));
+
+                // Generate PDF
+                const filename = 'ScriptAbility-Patient-Access-Stack-Brochure.pdf';
+                const opt = {
+                    margin:       [10, 10, 12, 10],
+                    filename,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                if (window.html2pdf) {
+                    await window.html2pdf().from(brochure).set(opt).save();
+                    showNotification('Brochure generated', 'success');
+                } else {
+                    showNotification('PDF library failed to load', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showNotification('Failed to generate brochure', 'error');
+            }
+        });
     }
 });
 
@@ -597,6 +761,23 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Helpers for brochure generation
+function escapeHtml(value) {
+	if (value == null) return '';
+	return String(value)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/\"/g, '&quot;')
+		.replace(/'/g, '&#039;');
+}
+
+function htmlToElement(htmlString) {
+	const template = document.createElement('template');
+	template.innerHTML = htmlString.trim();
+	return template.content.firstChild;
+}
 
 // Keyboard navigation support
 document.addEventListener('keydown', function(e) {
