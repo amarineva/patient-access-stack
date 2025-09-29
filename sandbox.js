@@ -1,9 +1,11 @@
 (function() {
     const LS_KEYS = {
-        apiKey: 'sandbox.openai.apiKey',
         lastProduct: 'sandbox.last.product',
         lastSigInput: 'sandbox.sig.input',
-        lastNdcInput: 'sandbox.ndc.input'
+        lastNdcInput: 'sandbox.ndc.input',
+        lastPillName: 'sandbox.pill.name',
+        lastPillNdc: 'sandbox.pill.ndc',
+        lastPillDescription: 'sandbox.pill.description'
     };
 
     const DEFAULT_SIG_MODEL = 'gpt-4.1-mini';
@@ -41,30 +43,50 @@
         return '';
     }
 
-    function saveConfig() {
-        const apiKey = getEl('apiKey').value.trim();
-        const product = getEl('productSelect').value;
+    let sigApiKeyPromise = null;
 
-        if (apiKey) localStorage.setItem(LS_KEYS.apiKey, apiKey);
-        localStorage.setItem(LS_KEYS.lastProduct, product);
-        showToast('Configuration saved', 'success');
+    async function getSigApiKey() {
+        if (typeof window !== 'undefined' && window.SIG_API_KEY && typeof window.SIG_API_KEY === 'string') {
+            return window.SIG_API_KEY.trim();
+        }
+
+        if (!sigApiKeyPromise) {
+            sigApiKeyPromise = (async () => {
+                try {
+                    const res = await fetch('.env', { cache: 'no-store' });
+                    if (!res.ok) {
+                        throw new Error(`Unable to load .env (HTTP ${res.status})`);
+                    }
+                    const text = await res.text();
+                    const match = text.split('\n').map(line => line.trim()).find(line => line.startsWith('OPENAI_SIG_API_KEY='));
+                    if (!match) {
+                        throw new Error('Missing OPENAI_SIG_API_KEY entry in .env');
+                    }
+                    const value = match.split('=')[1];
+                    if (!value || !value.trim()) {
+                        throw new Error('OPENAI_SIG_API_KEY is empty');
+                    }
+                    return value.trim();
+                } catch (err) {
+                    sigApiKeyPromise = null;
+                    throw err;
+                }
+            })();
+        }
+
+        return sigApiKeyPromise;
     }
 
     async function runSigNormalizer() {
-        const apiKey = (getEl('apiKey').value.trim() || localStorage.getItem(LS_KEYS.apiKey) || '').trim();
+        let apiKey = '';
         const model = DEFAULT_SIG_MODEL;
         const sigInput = getEl('sigInput').value.trim();
 
-        if (!apiKey) {
-            showToast('Please provide your OpenAI API key.', 'error');
-            return;
-        }
         if (!sigInput) {
             showToast('Please enter a SIG to normalize.', 'error');
             return;
         }
 
-        localStorage.setItem(LS_KEYS.apiKey, apiKey);
         localStorage.setItem(LS_KEYS.lastSigInput, sigInput);
 
         const runBtn = document.getElementById('runSigBtn');
@@ -74,6 +96,7 @@
         output.textContent = '';
 
         try {
+            apiKey = await getSigApiKey();
             const needsJsonTag = !/json/i.test(sigInput);
             const requestBody = {
                 model: model,
@@ -166,7 +189,6 @@
         const filesInput = getEl('medcastFiles');
         const textInput = getEl('medcastText');
         const ndcInput = getEl('medcastNdc');
-        const baseUrlInput = getEl('medcastBaseUrl');
         const output = getEl('outputMedcast');
         const runBtn = getEl('runMedcastBtn');
 
@@ -216,7 +238,7 @@
 
             // Configurable base URL (proxy-friendly to bypass CORS in browser)
             const fallback = 'https://medcast.scriptability.net';
-            const baseUrl = (baseUrlInput && baseUrlInput.value.trim()) || fallback;
+            const baseUrl = fallback;
             const endpoint = `${baseUrl}/generate_podcast`;
 
             const controller = new AbortController();
@@ -261,7 +283,7 @@
             output.textContent = 'Success: output.wav downloaded.';
             showToast('Podcast generated. Download started.', 'success');
         } catch (err) {
-            const baseUrl = (getEl('medcastBaseUrl') && getEl('medcastBaseUrl').value.trim()) || 'https://medcast.scriptability.net';
+            const baseUrl = 'https://medcast.scriptability.net';
             const likelyCors = err.name === 'TypeError' && /fetch/i.test(err.message);
             const likelyAbort = err.name === 'AbortError';
             const diagnostics = [
@@ -278,18 +300,116 @@
         }
     }
 
+    async function runPillIdentifier() {
+        const nameInput = getEl('pillName');
+        const ndcInput = getEl('pillNdc');
+        const descInput = getEl('pillDescription');
+        const imageInput = getEl('pillImage');
+        const output = getEl('outputPill');
+        const runBtn = getEl('runPillBtn');
+
+        const medName = (nameInput && nameInput.value || '').trim();
+        const ndcRaw = (ndcInput && ndcInput.value || '').trim();
+        const description = (descInput && descInput.value || '').trim();
+        const imageFile = imageInput && imageInput.files && imageInput.files[0];
+
+        if (!medName) {
+            showToast('Please enter the medication name.', 'error');
+            return;
+        }
+        if (!ndcRaw) {
+            showToast('Please enter the 11-digit NDC number.', 'error');
+            return;
+        }
+
+        const normalizedNdc = ndcRaw.replace(/[^0-9]/g, '');
+        if (normalizedNdc.length !== 11) {
+            showToast('NDC must contain exactly 11 digits.', 'error');
+            return;
+        }
+
+        if (!imageFile) {
+            showToast('Please upload an image of the medication.', 'error');
+            return;
+        }
+        if (imageFile.size > 5 * 1024 * 1024) {
+            showToast('Image is too large. Max size is 5MB.', 'error');
+            return;
+        }
+
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowedTypes.includes(imageFile.type)) {
+            showToast('Unsupported image format. Use JPG, PNG, GIF, or WebP.', 'error');
+            return;
+        }
+
+        localStorage.setItem(LS_KEYS.lastPillName, medName);
+        localStorage.setItem(LS_KEYS.lastPillNdc, normalizedNdc);
+        localStorage.setItem(LS_KEYS.lastPillDescription, description);
+
+        const pillInputs = [nameInput, ndcInput, descInput, imageInput];
+        const togglePillInputs = (disabled) => {
+            pillInputs.forEach(el => {
+                if (el) {
+                    el.disabled = disabled;
+                }
+            });
+        };
+
+        togglePillInputs(true);
+        runBtn.disabled = true;
+        runBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing';
+        output.textContent = '';
+
+        try {
+            const formData = new FormData();
+            formData.append('medications[0][name]', medName);
+            formData.append('medications[0][ndc]', normalizedNdc);
+            if (description) {
+                formData.append('medications[0][physical_description]', description);
+            }
+            formData.append('image[]', imageFile, imageFile.name || 'upload');
+
+            const res = await fetch('https://picanalysis.scriptability.net/analyze', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                let errText = await res.text();
+                try {
+                    const jsonErr = JSON.parse(errText);
+                    errText = JSON.stringify(jsonErr, null, 2);
+                } catch (_) {}
+                throw new Error(`HTTP ${res.status}: ${errText}`);
+            }
+
+            const data = await res.json();
+            output.textContent = JSON.stringify(data, null, 2);
+            showToast('Analysis complete.', 'success');
+        } catch (err) {
+            output.textContent = `Error: ${err.message}`;
+            showToast('Request failed. See response area for details.', 'error');
+        } finally {
+            runBtn.disabled = false;
+            runBtn.innerHTML = '<i class="fas fa-prescription-bottle-alt"></i> Analyze Image';
+            togglePillInputs(false);
+        }
+    }
+
     function wireEvents() {
-        getEl('saveConfigBtn').addEventListener('click', saveConfig);
         getEl('runSigBtn').addEventListener('click', runSigNormalizer);
         getEl('copyOutputSigBtn').addEventListener('click', () => {
             const text = getEl('outputSig').textContent || '';
             navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard', 'success'));
         });
         const productSelect = getEl('productSelect');
-        productSelect.addEventListener('change', () => {
-            localStorage.setItem(LS_KEYS.lastProduct, productSelect.value);
-            updateProductVisibility();
-        });
+        if (productSelect) {
+            productSelect.addEventListener('change', () => {
+                localStorage.setItem(LS_KEYS.lastProduct, productSelect.value);
+                updateProductVisibility();
+            });
+        }
 
         // Limit SIG input to 200 characters at runtime (guard for paste)
         const sigInputEl = getEl('sigInput');
@@ -364,6 +484,29 @@
         if (runMedcastBtn) {
             runMedcastBtn.addEventListener('click', runMedcast);
         }
+
+        // Pill Identifier wiring
+        const runPillBtn = document.getElementById('runPillBtn');
+        if (runPillBtn) {
+            runPillBtn.addEventListener('click', runPillIdentifier);
+        }
+        const copyPillBtn = document.getElementById('copyOutputPillBtn');
+        if (copyPillBtn) {
+            copyPillBtn.addEventListener('click', () => {
+                const text = getEl('outputPill').textContent || '';
+                navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard', 'success'));
+            });
+        }
+
+        const pillNdcInput = document.getElementById('pillNdc');
+        if (pillNdcInput) {
+            pillNdcInput.addEventListener('input', () => {
+                const digitsOnly = pillNdcInput.value.replace(/[^0-9]/g, '').slice(0, 11);
+                if (pillNdcInput.value !== digitsOnly) {
+                    pillNdcInput.value = digitsOnly;
+                }
+            });
+        }
     }
 
     function updateProductVisibility() {
@@ -372,31 +515,26 @@
             const product = section.getAttribute('data-product');
             section.style.display = product === selected ? 'grid' : 'none';
         });
-        const apiKeyGroup = document.getElementById('apiKeyGroup');
-        if (apiKeyGroup) {
-            apiKeyGroup.style.display = selected === 'sig-normalizer' ? 'flex' : 'none';
-        }
-        const medcastBaseUrlGroup = document.getElementById('medcastBaseUrlGroup');
-        if (medcastBaseUrlGroup) {
-            medcastBaseUrlGroup.style.display = selected === 'medcast' ? 'flex' : 'none';
-        }
     }
 
     function hydrateFromStorage() {
-        const savedKey = localStorage.getItem(LS_KEYS.apiKey) || '';
         const savedProduct = localStorage.getItem(LS_KEYS.lastProduct) || 'sig-normalizer';
         const preSig = localStorage.getItem(LS_KEYS.lastSigInput) || '';
         const preNdc = localStorage.getItem(LS_KEYS.lastNdcInput) || '';
+        const prePillName = localStorage.getItem(LS_KEYS.lastPillName) || '';
+        const prePillNdc = localStorage.getItem(LS_KEYS.lastPillNdc) || '';
+        const prePillDescription = localStorage.getItem(LS_KEYS.lastPillDescription) || '';
 
-        getEl('apiKey').value = savedKey;
         getEl('productSelect').value = savedProduct;
         getEl('sigInput').value = preSig.slice(0, 200);
         const ndcInputEl = document.getElementById('ndcInput');
         if (ndcInputEl) ndcInputEl.value = preNdc;
-        const medcastUrlEl = getEl('medcastBaseUrl');
-        if (medcastUrlEl && !medcastUrlEl.value) {
-            medcastUrlEl.value = 'https://medcast.scriptability.net';
-        }
+        const pillNameEl = document.getElementById('pillName');
+        if (pillNameEl) pillNameEl.value = prePillName;
+        const pillNdcEl = document.getElementById('pillNdc');
+        if (pillNdcEl) pillNdcEl.value = prePillNdc;
+        const pillDescEl = document.getElementById('pillDescription');
+        if (pillDescEl) pillDescEl.value = prePillDescription;
         updateProductVisibility();
 
         const url = new URL(window.location.href);

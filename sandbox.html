@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body>
+<body class="scriptability-theme">
     <header class="showroom-header">
         <div class="header-content">
             <div class="logo-section">
@@ -48,20 +48,10 @@
                             <select id="productSelect" class="sandbox-input">
                                 <option value="sig-normalizer">SIG Normalizer</option>
                                 <option value="ndc-analysis">NDC Analysis</option>
-                                <option value="medcast">Medcast (Podcast Generator)</option>
+                                <option value="medcast">Medcast</option>
+                                <option value="pill-identifier">Pill Identifier</option>
                             </select>
                         </div>
-                        <div class="form-group" id="apiKeyGroup">
-                            <label for="apiKey" class="sandbox-label">OpenAI API Key</label>
-                            <input id="apiKey" class="sandbox-input" type="password" placeholder="sk-..." autocomplete="off">
-                            <div class="sandbox-hint">Stored only in your browser (localStorage). Not sent until you run.</div>
-                        </div>
-                        <div class="form-group" id="medcastBaseUrlGroup" style="display:none">
-                            <label for="medcastBaseUrl" class="sandbox-label">Medcast Base URL</label>
-                            <input id="medcastBaseUrl" class="sandbox-input" type="text" placeholder="https://medcast.scriptability.net" autocomplete="off">
-                            <div class="sandbox-hint">Default: https://medcast.scriptability.net</div>
-                        </div>
-                        
                     </div>
 
                     <div>
@@ -73,7 +63,6 @@
                                     <div class="sandbox-hint">Max 200 characters.</div>
                                 </div>
                                 <div class="sandbox-actions">
-                                    <button id="saveConfigBtn" class="btn btn-secondary">Save Config</button>
                                     <button id="runSigBtn" class="btn btn-primary"><i class="fas fa-play"></i> Run</button>
                                 </div>
 
@@ -142,11 +131,51 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="sandbox-grid" data-product="pill-identifier" style="display:none">
+                            <div class="sandbox-runner">
+                                <div class="form-group">
+                                    <label for="pillName" class="sandbox-label">Medication Name</label>
+                                    <input id="pillName" class="sandbox-input" type="text" placeholder="e.g., Lisinopril" autocomplete="off" />
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="pillNdc" class="sandbox-label">NDC Number</label>
+                                    <input id="pillNdc" class="sandbox-input" type="text" inputmode="numeric" pattern="[0-9\-]*" placeholder="11-digit NDC (digits only)" autocomplete="off" />
+                                    <div class="sandbox-hint">Provide the 11-digit NDC. Dashes are removed automatically.</div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="pillDescription" class="sandbox-label">Physical Description (optional)</label>
+                                    <textarea id="pillDescription" class="sandbox-textarea" rows="3" placeholder="Color, shape, imprint..."></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="pillImage" class="sandbox-label">Medication Image</label>
+                                    <input id="pillImage" class="sandbox-input" type="file" accept="image/jpeg,image/png,image/gif,image/webp" />
+                                    <div class="sandbox-hint">Upload a clear photo of the medication. Max size 5MB. Supported: JPG, PNG, GIF, WebP.</div>
+                                </div>
+
+                                <div class="sandbox-actions">
+                                    <button id="runPillBtn" class="btn btn-primary"><i class="fas fa-prescription-bottle-alt"></i> Analyze Image</button>
+                                </div>
+
+                                <div class="sandbox-output">
+                                    <div class="output-header">
+                                        <h3>Response</h3>
+                                        <div class="output-actions">
+                                            <button id="copyOutputPillBtn" class="btn btn-secondary"><i class="fas fa-copy"></i> Copy</button>
+                                        </div>
+                                    </div>
+                                    <pre id="outputPill" class="sandbox-pre"></pre>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="sandbox-footnote">
-                    <p>This tool calls OpenAI's Responses API with your API key. For production, use server-side keys and environment isolation.</p>
+                    <p>En-Vision America Inc.</p>
                 </div>
             </div>
         </section>

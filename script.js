@@ -29,28 +29,42 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // App launch functionality
+    const PRODUCT_MAP = {
+        'sig normalizer': 'sig-normalizer',
+        'medcast': 'medcast',
+        'medcast (podcast generator)': 'medcast',
+        'ndc analysis': 'ndc-analysis',
+        'pill identifier': 'pill-identifier'
+    };
+
+    function launchApp(productKey, appName, triggerBtn) {
+        if (!productKey) {
+            showNotification(`Launching ${appName}...`, 'info');
+            return;
+        }
+
+        if (triggerBtn) {
+            triggerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            triggerBtn.disabled = true;
+        }
+
+        setTimeout(() => {
+            window.open(`sandbox.html?product=${encodeURIComponent(productKey)}`, '_blank', 'noopener');
+            if (triggerBtn) {
+                triggerBtn.innerHTML = '<i class="fas fa-play"></i>';
+                triggerBtn.disabled = false;
+            }
+        }, triggerBtn ? 600 : 150);
+    }
+
     const launchButtons = document.querySelectorAll('.app-launch-btn');
     launchButtons.forEach(button => {
         button.addEventListener('click', function(e) {
             e.stopPropagation();
             const appCard = this.closest('.app-card');
-            const appName = appCard.querySelector('.app-name').textContent;
-            const isSig = appName.toLowerCase().includes('sig normalizer');
-            
-            // Add loading state
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            this.disabled = true;
-            
-            // Simulate app launch
-            setTimeout(() => {
-                if (isSig) {
-                    window.open('sandbox.html?product=sig-normalizer', '_blank', 'noopener');
-                } else {
-                    showNotification(`Launching ${appName}...`, 'success');
-                }
-                this.innerHTML = '<i class="fas fa-play"></i>';
-                this.disabled = false;
-            }, 1500);
+            const appName = appCard.querySelector('.app-name').textContent.trim();
+            const productKey = PRODUCT_MAP[appName.toLowerCase()];
+            launchApp(productKey, appName, this);
         });
     });
     
@@ -59,7 +73,8 @@ document.addEventListener('DOMContentLoaded', function() {
         card.addEventListener('click', function() {
             const appName = this.querySelector('.app-name').textContent;
             const appDescription = this.querySelector('.app-description').textContent;
-            showAppDetails(appName, appDescription);
+            const productKey = PRODUCT_MAP[appName.toLowerCase()];
+            showAppDetails(appName, appDescription, productKey);
         });
     });
     
@@ -247,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Show app details modal
-function showAppDetails(appName, description) {
+function showAppDetails(appName, description, productKey) {
     const modal = document.createElement('div');
     modal.className = 'app-modal';
     modal.innerHTML = `
@@ -308,10 +323,18 @@ function showAppDetails(appName, description) {
     overlay.addEventListener('click', closeModal);
     
     const launchBtn = modal.querySelector('.launch-app');
-    launchBtn.addEventListener('click', function() {
-        showNotification(`Launching ${appName}...`, 'success');
-        closeModal();
-    });
+    if (productKey) {
+        launchBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeModal();
+            launchApp(productKey, appName);
+        });
+    } else {
+        launchBtn.addEventListener('click', function() {
+            showNotification(`Launching ${appName}...`, 'info');
+            closeModal();
+        });
+    }
     
     function closeModal() {
         modalContent.style.transform = 'scale(0.9)';
