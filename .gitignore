@@ -1,0 +1,43 @@
+# Environment variables (NEVER commit API keys!)
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+database-debug.log
+pubsub-debug.log
+
+# Firebase Functions
+functions/node_modules/
+functions/package-lock.json
+functions/.runtimeconfig.json
+
+# Build outputs
+dist/
+build/
+*.log
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.bak
+.cache/

@@ -12,6 +12,11 @@
     const PROMPT_ID = 'pmpt_68d1aac7137081978a62cfad87ffd3730b5be593908223a0';
     const PROMPT_VERSION = '7';
 
+    // Firebase Cloud Function URL (Gen2)
+    const SIG_API_ENDPOINT = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? 'http://127.0.0.1:5001/scriptability-patient-access/us-central1/normalizeSig'
+        : 'https://normalizesig-z4vamvc43a-uc.a.run.app';
+
     function getEl(id) {
         return document.getElementById(id);
     }
@@ -43,42 +48,8 @@
         return '';
     }
 
-    let sigApiKeyPromise = null;
-
-    async function getSigApiKey() {
-        if (typeof window !== 'undefined' && window.SIG_API_KEY && typeof window.SIG_API_KEY === 'string') {
-            return window.SIG_API_KEY.trim();
-        }
-
-        if (!sigApiKeyPromise) {
-            sigApiKeyPromise = (async () => {
-                try {
-                    const res = await fetch('.env', { cache: 'no-store' });
-                    if (!res.ok) {
-                        throw new Error(`Unable to load .env (HTTP ${res.status})`);
-                    }
-                    const text = await res.text();
-                    const match = text.split('\n').map(line => line.trim()).find(line => line.startsWith('OPENAI_SIG_API_KEY='));
-                    if (!match) {
-                        throw new Error('Missing OPENAI_SIG_API_KEY entry in .env');
-                    }
-                    const value = match.split('=')[1];
-                    if (!value || !value.trim()) {
-                        throw new Error('OPENAI_SIG_API_KEY is empty');
-                    }
-                    return value.trim();
-                } catch (err) {
-                    sigApiKeyPromise = null;
-                    throw err;
-                }
-            })();
-        }
-
-        return sigApiKeyPromise;
-    }
 
     async function runSigNormalizer() {
-        let apiKey = '';
         const model = DEFAULT_SIG_MODEL;
         const sigInput = getEl('sigInput').value.trim();
 
@@ -96,7 +67,6 @@
         output.textContent = '';
 
         try {
-            apiKey = await getSigApiKey();
             const needsJsonTag = !/json/i.test(sigInput);
             const requestBody = {
                 model: model,
@@ -109,10 +79,10 @@
                 store: true
             };
 
-            const res = await fetch('https://api.openai.com/v1/responses', {
+            // Call our Firebase Function instead of OpenAI directly
+            const res = await fetch(SIG_API_ENDPOINT, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${apiKey}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(requestBody)
