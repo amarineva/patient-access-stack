@@ -41,3 +41,6 @@ Thumbs.db
 *.tmp
 *.bak
 .cache/
+
+venv/
+convert_brochure.py
