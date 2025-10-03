@@ -102,6 +102,41 @@ document.addEventListener('DOMContentLoaded', function() {
         menuBtn.addEventListener('click', showMenuModal);
     }
 
+    // Scrollspy for header nav
+    const sections = [
+        { id: 'showcase', el: document.getElementById('showcase') },
+        { id: 'features', el: document.getElementById('features') },
+        { id: 'testimonials', el: document.getElementById('testimonials') },
+        { id: 'contact', el: document.getElementById('contact') },
+    ].filter(s => s.el);
+
+    const navLinks = Array.from(document.querySelectorAll('.main-nav .nav-link'));
+    const idToNav = new Map(navLinks.map(link => {
+        const hash = link.getAttribute('href') || '';
+        const id = hash.startsWith('#') ? hash.slice(1) : null;
+        return [id, link];
+    }));
+
+    if (sections.length && idToNav.size) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const id = entry.target.getAttribute('id');
+                const link = idToNav.get(id);
+                if (!link) return;
+                if (entry.isIntersecting) {
+                    navLinks.forEach(l => {
+                        l.classList.remove('active');
+                        l.removeAttribute('aria-current');
+                    });
+                    link.classList.add('active');
+                    link.setAttribute('aria-current', 'page');
+                }
+            });
+        }, { rootMargin: '-40% 0px -50% 0px', threshold: 0.1 });
+
+        sections.forEach(s => observer.observe(s.el));
+    }
+
     // Download Brochure - generate PDF from page content
     const brochureBtn = document.getElementById('download-brochure-btn');
     if (brochureBtn) {

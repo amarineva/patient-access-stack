@@ -18,37 +18,42 @@ body.scriptability-theme {
     color: var(--text-secondary);
 }
 
+/* Provide offset for fixed header when using in-page anchors */
+:target {
+    scroll-margin-top: 90px;
+}
+
 .container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 0 20px;
 }
 
-/* Color Variables - ScriptAbility-inspired Theme */
+/* Color Variables - ScriptAbility brand-aligned theme */
 :root {
-    /* Core brand blues */
-    --primary-color: #116dff;      /* ScriptAbility Blue */
-    --primary-dark: #0b4ebd;       /* Darker Blue */
-    --secondary-color: #3d9be9;    /* Lighter Accent Blue */
+    /* Brand core */
+    --primary-color: #00325b;      /* Brand Navy */
+    --primary-dark: #002a46;       /* Darker Navy */
+    --secondary-color: #0ea5e9;    /* Sky Blue Accent */
     /* Supporting accents */
-    --accent-color: #ec3534;       /* Accessible Accent Red */
+    --accent-color: #f59e0b;       /* Brand Orange */
     --success-color: #0f9d58;      /* Success Green */
     --warning-color: #ffb400;      /* Warm Yellow */
     /* Typography colors */
-    --text-primary: #080808;
-    --text-secondary: #5f6360;
-    --text-light: #8f8f8f;
+    --text-primary: #0f172a;       /* Slate 900 */
+    --text-secondary: #475569;     /* Slate 600 */
+    --text-light: #64748b;         /* Slate 500 */
     /* Surfaces */
-    --background: #f5f7fb;
+    --background: #f8fafc;         /* Subtle off-white */
     --white: #ffffff;
-    --border-color: #e0e0e0;
+    --border-color: #e2e8f0;       /* Light slate border */
     /* Shadows */
-    --shadow: 0 4px 6px -1px rgba(8, 8, 8, 0.08);
-    --shadow-lg: 0 10px 15px -3px rgba(8, 8, 8, 0.12);
-    --shadow-xl: 0 20px 25px -5px rgba(8, 8, 8, 0.15);
-    /* Gradients echoing brand blues */
-    --gradient-primary: linear-gradient(135deg, #116dff 0%, #3d9be9 100%);
-    --gradient-card: linear-gradient(145deg, #ffffff 0%, #f5f7fb 100%);
+    --shadow: 0 4px 6px -1px rgba(2, 6, 23, 0.08);
+    --shadow-lg: 0 10px 15px -3px rgba(2, 6, 23, 0.12);
+    --shadow-xl: 0 20px 25px -5px rgba(2, 6, 23, 0.15);
+    /* Gradients echoing brand */
+    --gradient-primary: linear-gradient(135deg, #00325b 0%, #0ea5e9 100%);
+    --gradient-card: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
 }
 
 /* Professional Header */
@@ -139,6 +144,14 @@ body.scriptability-theme {
     width: 100%;
 }
 
+.nav-link.active {
+    color: var(--primary-color);
+}
+
+.nav-link.active::after {
+    width: 100%;
+}
+
 .header-actions {
     display: flex;
     align-items: center;
@@ -154,6 +167,9 @@ body.scriptability-theme {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
 }
 
 .demo-btn:hover {
@@ -441,7 +457,7 @@ body.scriptability-theme {
 .shelf-footer {
     position: relative;
     height: 20px;
-    background: linear-gradient(90deg, #116dff, #3d9be9);
+    background: linear-gradient(90deg, #00325b, #0ea5e9);
     border-radius: 0 0 15px 15px;
     margin: 0 -30px -30px;
 }
@@ -477,6 +493,16 @@ body.scriptability-theme {
     font-weight: 700;
     color: var(--text-primary);
     margin-bottom: 1rem;
+}
+
+.section-title::after {
+    content: '';
+    display: block;
+    width: 64px;
+    height: 4px;
+    background: var(--primary-color);
+    margin: 12px auto 0;
+    border-radius: 2px;
 }
 
 .section-subtitle {
@@ -848,6 +874,14 @@ body.scriptability-theme {
     font-style: italic;
 }
 
+.testimonial-content p::before {
+    content: '“';
+    color: var(--primary-color);
+    margin-right: 6px;
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
 .testimonial-author {
     display: flex;
     justify-content: space-between;
@@ -1001,6 +1035,17 @@ body.scriptability-theme {
     background: var(--primary-color);
     color: var(--white);
     padding: 3rem 0 1rem;
+    position: relative;
+}
+
+.footer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--accent-color);
 }
 
 .footer-content {
@@ -1043,6 +1088,9 @@ body.scriptability-theme {
 
 .footer-links a:hover {
     color: var(--white);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 2px;
 }
 
 .footer-bottom {
@@ -1179,6 +1227,7 @@ body.scriptability-theme {
 /* Smooth Scrolling */
 html {
     scroll-behavior: smooth;
+    scroll-padding-top: 90px;
 }
 
 /* Animation for app cards */
