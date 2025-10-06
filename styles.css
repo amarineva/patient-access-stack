@@ -1345,3 +1345,92 @@ textarea:focus {
         padding: 20px 0;
     }
 }
+
+/* MCP Status Badge */
+.mcp-status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: auto;
+}
+
+.mcp-status-badge[data-status="disconnected"] {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.mcp-status-badge[data-status="connecting"] {
+    background: #fef3c7;
+    color: #92400e;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.mcp-status-badge[data-status="connected"] {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* MCP Panel */
+.mcp-panel {
+    background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+    border: 2px solid var(--secondary-color);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-top: 1rem;
+}
+
+.mcp-panel .sandbox-runner {
+    border-left: 4px solid var(--secondary-color);
+}
+
+.mcp-status-display {
+    background: var(--white);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    box-shadow: var(--shadow);
+}
+
+.mcp-status-display strong {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+/* Enhanced Product Selector and MCP Button */
+#productSelect {
+    border: 2px solid var(--secondary-color);
+    background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+    box-shadow: 0 2px 4px rgba(14, 165, 233, 0.1);
+    transition: all 0.3s ease;
+}
+
+#productSelect:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 4px 8px rgba(14, 165, 233, 0.15);
+}
+
+.mcp-toggle-btn {
+    border: 2px solid var(--secondary-color) !important;
+    background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%) !important;
+    box-shadow: 0 2px 4px rgba(14, 165, 233, 0.1) !important;
+    transition: all 0.3s ease !important;
+}
+
+.mcp-toggle-btn:hover {
+    box-shadow: 0 4px 8px rgba(14, 165, 233, 0.2) !important;
+    transform: translateY(-1px);
+}
+
+.mcp-toggle-btn:active {
+    transform: translateY(0);
+}

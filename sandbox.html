@@ -78,6 +78,12 @@
                                     <option value="pill-identifier">Pill Identifier</option>
                                 </select>
                             </div>
+                            <div class="form-group" style="margin-top: 16px;">
+                                <button id="mcpToggleBtn" class="btn btn-secondary mcp-toggle-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                    <i class="fas fa-plug"></i>
+                                    <span>ScriptAbility MCP Server</span>
+                                </button>
+                            </div>
                         </div>
 
                         <div>
@@ -194,6 +200,62 @@
                                         </div>
                                     </div>
                                     <pre id="outputPill" class="sandbox-pre"></pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sandbox-grid mcp-panel" id="mcpPanel" style="display:none">
+                            <div class="sandbox-runner">
+                                <div class="mcp-status-display" style="margin-bottom: 1.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <strong>Connection Status:</strong>
+                                        <span id="mcpStatusBadge" class="mcp-status-badge" data-status="disconnected">Disconnected</span>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="mcpEndpoint" class="sandbox-label">MCP Endpoint (HTTPS)</label>
+                                    <input id="mcpEndpoint" class="sandbox-input" type="url" placeholder="https://your-mcp-host.example.com/mcp" autocomplete="off" />
+                                    <div class="sandbox-hint">Must be HTTPS in production to avoid mixed content. Default for local: http://localhost:3434/mcp</div>
+                                </div>
+
+                                <div class="form-group">
+                                    <div class="sandbox-hint">The ScriptAbility MCP exposes tools for AI agents and agentic workflows: <code>sig_normalize</code>, <code>ndc_analysis</code>, <code>medcast_generate_podcast</code>, <code>pill_identifier</code>.</div>
+                                </div>
+
+                                <div class="sandbox-actions" style="gap: 12px; display: flex; flex-wrap: wrap;">
+                                    <button id="mcpConnectBtn" class="btn btn-primary"><i class="fas fa-plug"></i> Connect</button>
+                                    <button id="mcpDisconnectBtn" class="btn btn-secondary" style="display:none;"><i class="fas fa-times-circle"></i> Disconnect</button>
+                                    <button id="mcpListBtn" class="btn btn-secondary" disabled><i class="fas fa-list"></i> List Tools</button>
+                                </div>
+
+                                <div class="form-group" style="margin-top:16px;">
+                                    <label for="mcpToolSelect" class="sandbox-label">Select Tool</label>
+                                    <select id="mcpToolSelect" class="sandbox-input" disabled>
+                                        <option value="">-- Choose a tool --</option>
+                                        <option value="sig_normalize">sig_normalize - Normalize pharmacy SIG instructions</option>
+                                        <option value="ndc_analysis">ndc_analysis - Look up NDC descriptor details</option>
+                                        <option value="medcast_generate_podcast">medcast_generate_podcast - Generate medication podcast</option>
+                                        <option value="pill_identifier">pill_identifier - Analyze medication image</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mcpArgs" class="sandbox-label">Arguments (JSON)</label>
+                                    <textarea id="mcpArgs" class="sandbox-textarea" rows="6" placeholder='Select a tool to see example arguments' disabled></textarea>
+                                    <div class="sandbox-hint" id="mcpArgsHint"></div>
+                                </div>
+                                <div class="sandbox-actions">
+                                    <button id="mcpCallBtn" class="btn btn-primary" disabled><i class="fas fa-play"></i> Call Tool</button>
+                                </div>
+
+                                <div class="sandbox-output">
+                                    <div class="output-header">
+                                        <h3>MCP Response</h3>
+                                        <div class="output-actions">
+                                            <button id="copyOutputMcpBtn" class="btn btn-secondary"><i class="fas fa-copy"></i> Copy</button>
+                                        </div>
+                                    </div>
+                                    <pre id="outputMcp" class="sandbox-pre"></pre>
                                 </div>
                             </div>
                         </div>

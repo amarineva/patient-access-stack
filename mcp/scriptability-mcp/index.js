@@ -350,7 +350,17 @@ async function startHttpIfRequested() {
   const port = process.env.MCP_PORT ? parseInt(process.env.MCP_PORT, 10) : 3333;
   const app = express();
   app.use(express.json({ limit: "4mb" }));
-  app.use(cors({ origin: "*", exposedHeaders: ["Mcp-Session-Id"] }));
+  const allowedOriginsEnv = process.env.MCP_ALLOWED_ORIGINS || "";
+  const allowedOrigins = allowedOriginsEnv
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  app.use(
+    cors({
+      origin: allowedOrigins.length ? allowedOrigins : "*",
+      exposedHeaders: ["Mcp-Session-Id"],
+    })
+  );
 
   // Single stateless transport (no session management)
   const transport = new StreamableHTTPServerTransport({

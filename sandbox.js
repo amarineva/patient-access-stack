@@ -5,7 +5,8 @@
         lastNdcInput: 'sandbox.ndc.input',
         lastPillName: 'sandbox.pill.name',
         lastPillNdc: 'sandbox.pill.ndc',
-        lastPillDescription: 'sandbox.pill.description'
+        lastPillDescription: 'sandbox.pill.description',
+        lastMcpEndpoint: 'sandbox.mcp.endpoint'
     };
 
     const DEFAULT_SIG_MODEL = 'gpt-4.1-mini';
@@ -24,6 +25,25 @@
         'ndc-analysis': 'NDC Analysis',
         'medcast': 'Medcast',
         'pill-identifier': 'Pill Identifier'
+    };
+
+    const MCP_TOOL_EXAMPLES = {
+        'sig_normalize': {
+            args: {"sig": "Take 1 tablet by mouth twice daily"},
+            hint: 'Normalizes pharmacy SIG instructions into structured JSON'
+        },
+        'ndc_analysis': {
+            args: {"ndc": "00527-1312-01"},
+            hint: 'Looks up pharmaceutical data for an NDC code (digits and hyphens allowed)'
+        },
+        'medcast_generate_podcast': {
+            args: {"text": "Important medication information", "ndc": "65862-523-01"},
+            hint: 'Generates audio podcast. Note: Requires file paths for files parameter'
+        },
+        'pill_identifier': {
+            args: {"name": "Lisinopril", "ndc11": "00527131201", "imagePath": "/path/to/image.jpg"},
+            hint: 'Analyzes medication image. Note: imagePath must be accessible to MCP server'
+        }
     };
 
     // Firebase Cloud Function URL (Gen2)
@@ -226,6 +246,270 @@
             }
         }
         return '';
+    }
+
+    // -------- MCP (Model Context Protocol) helpers --------
+    const MCP_PROTOCOL_VERSION = '2025-03-26';
+    const mcpState = {
+        endpoint: '',
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        connected: false
+    };
+
+    function setMcpStatus(status) {
+        const badge = getEl('mcpStatusBadge');
+        if (badge) {
+            badge.setAttribute('data-status', status);
+            const labels = {
+                'disconnected': 'Disconnected',
+                'connecting': 'Connecting...',
+                'connected': 'Connected'
+            };
+            badge.textContent = labels[status] || status;
+        }
+        mcpState.connected = status === 'connected';
+        
+        // Enable/disable controls based on connection status
+        const connectBtn = getEl('mcpConnectBtn');
+        const disconnectBtn = getEl('mcpDisconnectBtn');
+        const listBtn = getEl('mcpListBtn');
+        const toolSelect = getEl('mcpToolSelect');
+        const argsTextarea = getEl('mcpArgs');
+        const callBtn = getEl('mcpCallBtn');
+        
+        if (status === 'connected') {
+            if (connectBtn) connectBtn.style.display = 'none';
+            if (disconnectBtn) disconnectBtn.style.display = 'inline-flex';
+            if (listBtn) listBtn.disabled = false;
+            if (toolSelect) toolSelect.disabled = false;
+            if (argsTextarea) argsTextarea.disabled = false;
+            if (callBtn) callBtn.disabled = false;
+        } else {
+            if (connectBtn) connectBtn.style.display = 'inline-flex';
+            if (disconnectBtn) disconnectBtn.style.display = 'none';
+            if (listBtn) listBtn.disabled = true;
+            if (toolSelect) toolSelect.disabled = true;
+            if (argsTextarea) argsTextarea.disabled = true;
+            if (callBtn) callBtn.disabled = true;
+        }
+    }
+
+    function getMcpEndpoint() {
+        const input = getEl('mcpEndpoint');
+        let value = (input && input.value || '').trim();
+        if (!value) {
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            value = isLocal ? 'http://localhost:3434/mcp' : '';
+            if (input) input.value = value;
+        }
+        return value;
+    }
+
+    function saveMcpEndpoint(endpoint) {
+        try { localStorage.setItem(LS_KEYS.lastMcpEndpoint, endpoint); } catch {}
+    }
+
+    function warnIfMixedContent(endpoint) {
+        const isPageHttps = window.location.protocol === 'https:';
+        if (isPageHttps && /^http:\/\//i.test(endpoint)) {
+            showToast('This page is HTTPS. Use an HTTPS MCP endpoint to avoid browser blocking (mixed content).', 'error');
+            return true;
+        }
+        return false;
+    }
+
+    async function fetchMcp(endpoint, message, includeProtocolHeader) {
+        const headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, text/event-stream'
+        };
+        if (includeProtocolHeader) {
+            headers['mcp-protocol-version'] = mcpState.protocolVersion || MCP_PROTOCOL_VERSION;
+        }
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(message)
+        });
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        const text = await res.text();
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${text}`);
+        }
+        if (ct.includes('application/json')) {
+            return JSON.parse(text);
+        }
+        if (ct.includes('text/event-stream')) {
+            // Parse first JSON-RPC object from SSE stream
+            const lines = text.split(/\r?\n/);
+            for (const line of lines) {
+                if (line.startsWith('data:')) {
+                    const payload = line.slice(5).trim();
+                    try { return JSON.parse(payload); } catch {}
+                }
+            }
+            // Fallback: try last non-empty data line
+            for (let i = lines.length - 1; i >= 0; i--) {
+                const l = lines[i].trim();
+                if (l.startsWith('data:')) {
+                    try { return JSON.parse(l.slice(5).trim()); } catch {}
+                }
+            }
+            throw new Error('Unable to parse SSE response from MCP');
+        }
+        // Unknown content type, try JSON anyway
+        try { return JSON.parse(text); } catch {
+            return { jsonrpc: '2.0', error: { code: -32000, message: 'Unexpected response', data: text }, id: null };
+        }
+    }
+
+    function toggleMcpPanel() {
+        const panel = getEl('mcpPanel');
+        if (!panel) return;
+        const isVisible = panel.style.display !== 'none';
+        
+        if (isVisible) {
+            // Closing MCP panel - show the selected product
+            panel.style.display = 'none';
+            updateProductVisibility();
+        } else {
+            // Opening MCP panel - hide all products
+            panel.style.display = 'grid';
+            document.querySelectorAll('.sandbox-grid').forEach(section => {
+                const product = section.getAttribute('data-product');
+                if (product && section.id !== 'mcpPanel') {
+                    section.style.display = 'none';
+                }
+            });
+        }
+    }
+
+    async function mcpConnect() {
+        const endpoint = getMcpEndpoint();
+        if (!endpoint) {
+            showToast('Enter MCP endpoint URL.', 'error');
+            return;
+        }
+        if (warnIfMixedContent(endpoint)) return;
+
+        const out = getEl('outputMcp');
+        const btn = getEl('mcpConnectBtn');
+        try {
+            setMcpStatus('connecting');
+            btn.disabled = true;
+            out.textContent = 'Connecting to MCP server...';
+            const message = {
+                jsonrpc: '2.0',
+                id: 1,
+                method: 'initialize',
+                params: {
+                    protocolVersion: MCP_PROTOCOL_VERSION,
+                    capabilities: { tools: {} },
+                    clientInfo: { name: 'scriptability-sandbox', version: '0.1.0' }
+                }
+            };
+            const data = await fetchMcp(endpoint, message, false);
+            mcpState.endpoint = endpoint;
+            mcpState.protocolVersion = (data && data.result && data.result.protocolVersion) || MCP_PROTOCOL_VERSION;
+            saveMcpEndpoint(endpoint);
+            out.textContent = JSON.stringify(data, null, 2);
+            setMcpStatus('connected');
+            showToast('MCP connected successfully.', 'success');
+        } catch (err) {
+            out.textContent = `Connection failed: ${err.message}`;
+            setMcpStatus('disconnected');
+            showToast('Connection failed.', 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    function mcpDisconnect() {
+        mcpState.endpoint = '';
+        mcpState.connected = false;
+        setMcpStatus('disconnected');
+        const out = getEl('outputMcp');
+        if (out) out.textContent = 'Disconnected from MCP server.';
+        showToast('Disconnected.', 'info');
+    }
+
+    async function mcpListTools() {
+        if (!mcpState.connected) { showToast('Connect first.', 'error'); return; }
+        const endpoint = mcpState.endpoint;
+        const out = getEl('outputMcp');
+        const btn = getEl('mcpListBtn');
+        try {
+            btn.disabled = true;
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Listing';
+            const message = { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} };
+            const data = await fetchMcp(endpoint, message, true);
+            out.textContent = JSON.stringify(data, null, 2);
+            showToast('Fetched tools.', 'success');
+            btn.innerHTML = origHtml;
+        } catch (err) {
+            out.textContent = `Error: ${err.message}`;
+            showToast('List tools failed.', 'error');
+            btn.innerHTML = '<i class="fas fa-list"></i> List Tools';
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    function onMcpToolChange() {
+        const toolSelect = getEl('mcpToolSelect');
+        const argsEl = getEl('mcpArgs');
+        const hintEl = getEl('mcpArgsHint');
+        if (!toolSelect || !argsEl) return;
+        
+        const toolName = toolSelect.value;
+        if (!toolName) {
+            argsEl.value = '';
+            argsEl.placeholder = 'Select a tool to see example arguments';
+            if (hintEl) hintEl.textContent = '';
+            return;
+        }
+        
+        const example = MCP_TOOL_EXAMPLES[toolName];
+        if (example) {
+            argsEl.value = JSON.stringify(example.args, null, 2);
+            if (hintEl) hintEl.textContent = example.hint;
+        }
+    }
+
+    async function mcpCallTool() {
+        if (!mcpState.connected) { showToast('Connect first.', 'error'); return; }
+        const endpoint = mcpState.endpoint;
+        const toolSelect = getEl('mcpToolSelect');
+        const argsEl = getEl('mcpArgs');
+        const out = getEl('outputMcp');
+        const btn = getEl('mcpCallBtn');
+        const toolName = toolSelect ? toolSelect.value : '';
+        if (!toolName) { showToast('Select a tool.', 'error'); return; }
+        let args = {};
+        if (argsEl && argsEl.value.trim()) {
+            try { args = JSON.parse(argsEl.value); }
+            catch { showToast('Arguments must be valid JSON.', 'error'); return; }
+        }
+        try {
+            btn.disabled = true;
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calling';
+            const message = {
+                jsonrpc: '2.0', id: 3, method: 'tools/call',
+                params: { name: toolName, arguments: args }
+            };
+            const data = await fetchMcp(endpoint, message, true);
+            out.textContent = JSON.stringify(data, null, 2);
+            showToast('Tool call complete.', 'success');
+            btn.innerHTML = origHtml;
+        } catch (err) {
+            out.textContent = `Error: ${err.message}`;
+            showToast('Tool call failed.', 'error');
+            btn.innerHTML = '<i class="fas fa-play"></i> Call Tool';
+        } finally {
+            btn.disabled = false;
+        }
     }
 
 
@@ -557,6 +841,11 @@
         if (productSelect) {
             productSelect.addEventListener('change', () => {
                 localStorage.setItem(LS_KEYS.lastProduct, productSelect.value);
+                // Close MCP panel if open and show the selected product
+                const mcpPanel = getEl('mcpPanel');
+                if (mcpPanel && mcpPanel.style.display !== 'none') {
+                    mcpPanel.style.display = 'none';
+                }
                 updateProductVisibility();
             });
         }
@@ -657,6 +946,25 @@
                 }
             });
         }
+
+        // MCP wiring
+        const mcpToggleBtn = getEl('mcpToggleBtn');
+        if (mcpToggleBtn) mcpToggleBtn.addEventListener('click', toggleMcpPanel);
+        const mcpConnectBtn = getEl('mcpConnectBtn');
+        if (mcpConnectBtn) mcpConnectBtn.addEventListener('click', mcpConnect);
+        const mcpDisconnectBtn = getEl('mcpDisconnectBtn');
+        if (mcpDisconnectBtn) mcpDisconnectBtn.addEventListener('click', mcpDisconnect);
+        const mcpListBtn = getEl('mcpListBtn');
+        if (mcpListBtn) mcpListBtn.addEventListener('click', mcpListTools);
+        const mcpToolSelect = getEl('mcpToolSelect');
+        if (mcpToolSelect) mcpToolSelect.addEventListener('change', onMcpToolChange);
+        const mcpCallBtn = getEl('mcpCallBtn');
+        if (mcpCallBtn) mcpCallBtn.addEventListener('click', mcpCallTool);
+        const copyMcpBtn = getEl('copyOutputMcpBtn');
+        if (copyMcpBtn) copyMcpBtn.addEventListener('click', () => {
+            const text = (getEl('outputMcp').textContent || '');
+            navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard', 'success'));
+        });
     }
 
     function updateActiveProductLabel() {
@@ -707,6 +1015,11 @@
         if (pillNdcEl) pillNdcEl.value = prePillNdc;
         const pillDescEl = document.getElementById('pillDescription');
         if (pillDescEl) pillDescEl.value = prePillDescription;
+        const mcpEndpointEl = getEl('mcpEndpoint');
+        if (mcpEndpointEl) {
+            const saved = localStorage.getItem(LS_KEYS.lastMcpEndpoint) || '';
+            if (saved) mcpEndpointEl.value = saved;
+        }
         updateProductVisibility();
         updateActiveProductLabel();
 
