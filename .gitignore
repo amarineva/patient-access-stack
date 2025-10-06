@@ -44,3 +44,9 @@ Thumbs.db
 
 venv/
 convert_brochure.py
+
+# Extra
+AGENTS.md
+DEPLOYMENT.md
+CLAUDE.md
+.gitignore
