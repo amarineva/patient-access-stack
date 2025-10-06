@@ -12,13 +12,193 @@
     const PROMPT_ID = 'pmpt_68d1aac7137081978a62cfad87ffd3730b5be593908223a0';
     const PROMPT_VERSION = '7';
 
+    const AUTH_STATE_KEY = 'sandbox.authenticated';
+    const SANDBOX_CREDENTIALS = Object.freeze({
+        // Update when rotating sandbox credentials.
+        username: 'en-vision-tester',
+        passwordHash: '66e8ca6dcb59bce51d597e7698740862ff4e143e18533d73467ec75a8d3485f1'
+    });
+
+    const PRODUCT_LABELS = {
+        'sig-normalizer': 'SIG Normalizer',
+        'ndc-analysis': 'NDC Analysis',
+        'medcast': 'Medcast',
+        'pill-identifier': 'Pill Identifier'
+    };
+
     // Firebase Cloud Function URL (Gen2)
-    const SIG_API_ENDPOINT = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? 'http://127.0.0.1:5001/scriptability-patient-access/us-central1/normalizeSig'
-        : 'https://normalizesig-z4vamvc43a-uc.a.run.app';
+    const SIG_API_ENDPOINT = (() => {
+        const productionUrl = 'https://normalizesig-z4vamvc43a-uc.a.run.app';
+        const emulatorUrl = 'http://127.0.0.1:5001/scriptability-patient-access/us-central1/normalizeSig';
+
+        const params = new URLSearchParams(window.location.search);
+        const override = params.get('sigApi');
+        if (override === 'emulator') {
+            return emulatorUrl;
+        }
+        if (override === 'prod') {
+            return productionUrl;
+        }
+
+        const host = window.location.hostname;
+        const port = window.location.port;
+        const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+        const isFirebaseEmulator = isLocalHost && (port === '5000' || port === '5001');
+        return isFirebaseEmulator ? emulatorUrl : productionUrl;
+    })();
 
     function getEl(id) {
         return document.getElementById(id);
+    }
+
+    function persistAuthState(isAuthenticated) {
+        try {
+            if (isAuthenticated) {
+                sessionStorage.setItem(AUTH_STATE_KEY, 'true');
+            } else {
+                sessionStorage.removeItem(AUTH_STATE_KEY);
+            }
+        } catch (err) {
+            console.warn('Sandbox auth persistence failed:', err);
+        }
+    }
+
+    function readAuthState() {
+        try {
+            return sessionStorage.getItem(AUTH_STATE_KEY) === 'true';
+        } catch (err) {
+            console.warn('Sandbox auth read failed:', err);
+            return false;
+        }
+    }
+
+    function setSandboxAuthVisibility(isAuthenticated) {
+        const gate = getEl('sandboxGate');
+        const app = getEl('sandboxApp');
+        const logoutBtn = getEl('sandboxLogoutBtn');
+        if (gate) {
+            gate.hidden = isAuthenticated;
+        }
+        if (app) {
+            app.hidden = !isAuthenticated;
+        }
+        if (logoutBtn) {
+            logoutBtn.hidden = !isAuthenticated;
+        }
+    }
+
+    async function sha256Hex(value) {
+        if (!window.crypto || !window.crypto.subtle) {
+            throw new Error('Web Crypto API unavailable.');
+        }
+        const encoder = new TextEncoder();
+        const data = encoder.encode(value);
+        const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function validateCredentials(username, password) {
+        if (username !== SANDBOX_CREDENTIALS.username) {
+            return false;
+        }
+        const hashed = await sha256Hex(password);
+        return hashed === SANDBOX_CREDENTIALS.passwordHash;
+    }
+
+    function focusSandboxUsername() {
+        const usernameInput = getEl('sandboxUsername');
+        if (usernameInput) {
+            usernameInput.focus();
+        }
+    }
+
+    function initSandboxAuth() {
+        const loginForm = getEl('sandboxLoginForm');
+        const errorEl = getEl('sandboxLoginError');
+        const submitBtn = getEl('sandboxLoginSubmit');
+        const logoutBtn = getEl('sandboxLogoutBtn');
+
+        if (!loginForm || !submitBtn) {
+            setSandboxAuthVisibility(true);
+            return;
+        }
+
+        const remembered = readAuthState();
+        setSandboxAuthVisibility(remembered);
+        if (!remembered) {
+            setTimeout(focusSandboxUsername, 50);
+        }
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (errorEl) {
+                errorEl.textContent = '';
+            }
+
+            const formData = new FormData(loginForm);
+            const username = (formData.get('username') || '').toString().trim();
+            const password = (formData.get('password') || '').toString();
+
+            if (!username || !password) {
+                if (errorEl) {
+                    errorEl.textContent = 'Enter both username and password.';
+                }
+                focusSandboxUsername();
+                return;
+            }
+
+            const originalLabel = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying';
+
+            try {
+                const isValid = await validateCredentials(username, password);
+                if (isValid) {
+                    persistAuthState(true);
+                    setSandboxAuthVisibility(true);
+                    loginForm.reset();
+                    if (errorEl) {
+                        errorEl.textContent = '';
+                    }
+                    setTimeout(() => {
+                        const productSelect = getEl('productSelect');
+                        if (productSelect) {
+                            productSelect.focus();
+                        }
+                    }, 150);
+                } else if (errorEl) {
+                    errorEl.textContent = 'Incorrect username or password.';
+                }
+            } catch (err) {
+                console.error('Sandbox auth error:', err);
+                if (errorEl) {
+                    errorEl.textContent = 'Unable to verify credentials in this browser.';
+                }
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalLabel;
+                const passwordField = loginForm.querySelector('input[name="password"]');
+                if (passwordField) {
+                    passwordField.value = '';
+                }
+                if (!readAuthState()) {
+                    focusSandboxUsername();
+                }
+            }
+        });
+
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                persistAuthState(false);
+                setSandboxAuthVisibility(false);
+                loginForm.reset();
+                if (errorEl) {
+                    errorEl.textContent = '';
+                }
+                setTimeout(focusSandboxUsername, 50);
+            });
+        }
     }
 
     function showToast(message, type = 'info') {
@@ -479,12 +659,34 @@
         }
     }
 
+    function updateActiveProductLabel() {
+        const navProductEl = getEl('sandboxNavProduct');
+        if (!navProductEl) {
+            return;
+        }
+        const selectEl = getEl('productSelect');
+        const value = selectEl ? selectEl.value : 'sig-normalizer';
+        if (selectEl && selectEl.options) {
+            const option = selectEl.options[selectEl.selectedIndex];
+            if (option) {
+                navProductEl.textContent = option.text.trim();
+                return;
+            }
+        }
+        navProductEl.textContent = PRODUCT_LABELS[value] || 'SIG Normalizer';
+    }
+
     function updateProductVisibility() {
-        const selected = getEl('productSelect').value;
+        const selectEl = getEl('productSelect');
+        if (!selectEl) {
+            return;
+        }
+        const selected = selectEl.value;
         document.querySelectorAll('.sandbox-grid').forEach(section => {
             const product = section.getAttribute('data-product');
             section.style.display = product === selected ? 'grid' : 'none';
         });
+        updateActiveProductLabel();
     }
 
     function hydrateFromStorage() {
@@ -506,6 +708,7 @@
         const pillDescEl = document.getElementById('pillDescription');
         if (pillDescEl) pillDescEl.value = prePillDescription;
         updateProductVisibility();
+        updateActiveProductLabel();
 
         const url = new URL(window.location.href);
         const preset = url.searchParams.get('product');
@@ -517,9 +720,9 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+        initSandboxAuth();
         wireEvents();
         hydrateFromStorage();
+        updateActiveProductLabel();
     });
 })();
-
-

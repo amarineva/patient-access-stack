@@ -9,96 +9,122 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body class="scriptability-theme">
-    <header class="showroom-header">
-        <div class="header-content">
-            <div class="logo-section">
+    <div id="sandboxGate" class="sandbox-gate" hidden>
+        <div class="sandbox-gate-card">
+            <div class="sandbox-gate-header">
                 <div class="logo-icon">
-                    <i class="fas fa-pills"></i>
+                    <i class="fas fa-lock"></i>
                 </div>
-                <div class="logo-text">
-                    <h1>ScriptAbility</h1>
-                    <p>Pharmacy Software Solutions</p>
+                <h1>Sandbox Access</h1>
+                <p>For internal and approved testers only.</p>
+            </div>
+            <form id="sandboxLoginForm" class="sandbox-gate-form" novalidate>
+                <div class="form-group">
+                    <label for="sandboxUsername" class="sandbox-label">Username</label>
+                    <input id="sandboxUsername" name="username" class="sandbox-input" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required />
                 </div>
-            </div>
-            <nav class="main-nav">
-                <a href="index.html" class="nav-link">Home</a>
-                <a href="#sig" class="nav-link">SIG Normalizer</a>
-            </nav>
-            <div class="header-actions">
-                <button class="demo-btn" onclick="window.location.href='index.html'">Back to Site</button>
-                <button class="menu-btn">
-                    <i class="fas fa-bars"></i>
-                </button>
-            </div>
+                <div class="form-group">
+                    <label for="sandboxPassword" class="sandbox-label">Password</label>
+                    <input id="sandboxPassword" name="password" class="sandbox-input" type="password" autocomplete="off" required />
+                </div>
+                <p id="sandboxLoginError" class="sandbox-gate-error" role="alert"></p>
+                <button type="submit" class="btn btn-primary" id="sandboxLoginSubmit">Enter Sandbox</button>
+            </form>
         </div>
-    </header>
+    </div>
 
-    <main style="padding-top: 100px;">
-        <section class="app-showcase" id="sig">
-            <div class="container">
-                <div class="section-header">
-                    <h2 class="section-title">Sandbox</h2>
-                    <p class="section-subtitle">Test our APIs instantly — no setup or configuration required.</p>
+    <div id="sandboxApp" hidden>
+        <header class="showroom-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-icon">
+                        <i class="fas fa-pills"></i>
+                    </div>
+                    <div class="logo-text">
+                        <h1>ScriptAbility</h1>
+                        <p>Pharmacy Software Solutions</p>
+                    </div>
                 </div>
+                <nav class="main-nav">
+                    <a href="index.html" class="nav-link">Home</a>
+                    <a href="#sandbox" class="nav-link" id="sandboxNavLink">Sandbox – <span id="sandboxNavProduct">SIG Normalizer</span></a>
+                </nav>
+                <div class="header-actions">
+                    <button class="demo-btn" onclick="window.location.href='index.html'">Back to Site</button>
+                    <button id="sandboxLogoutBtn" class="btn btn-secondary" type="button" hidden>Log Out</button>
+                    <button class="menu-btn">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
 
-                <div class="sandbox-panel">
-                    <div class="sandbox-config">
-                        <div class="form-group">
-                            <label for="productSelect" class="sandbox-label">Product</label>
-                            <select id="productSelect" class="sandbox-input">
-                                <option value="sig-normalizer">SIG Normalizer</option>
-                                <option value="ndc-analysis">NDC Analysis</option>
-                                <option value="medcast">Medcast</option>
-                                <option value="pill-identifier">Pill Identifier</option>
-                            </select>
-                        </div>
+        <main style="padding-top: 100px;">
+            <section class="app-showcase" id="sandbox">
+                <div class="container">
+                    <div class="section-header">
+                        <h2 class="section-title">Sandbox</h2>
+                        <p class="section-subtitle">Test our APIs instantly — no setup or configuration required.</p>
                     </div>
 
-                    <div>
-                        <div class="sandbox-grid" data-product="sig-normalizer">
-                            <div class="sandbox-runner">
-                                <div class="form-group">
-                                    <label for="sigInput" class="sandbox-label">Pharmacy Instruction (SIG)</label>
-                                    <textarea id="sigInput" class="sandbox-textarea" rows="5" placeholder="1 tab po bid" maxlength="200"></textarea>
-                                    <div class="sandbox-hint">Max 200 characters.</div>
-                                </div>
-                                <div class="sandbox-actions">
-                                    <button id="runSigBtn" class="btn btn-primary"><i class="fas fa-play"></i> Run</button>
-                                </div>
-
-                                <div class="sandbox-output">
-                                    <div class="output-header">
-                                        <h3>Response</h3>
-                                        <div class="output-actions">
-                                            <button id="copyOutputSigBtn" class="btn btn-secondary"><i class="fas fa-copy"></i> Copy</button>
-                                        </div>
-                                    </div>
-                                    <pre id="outputSig" class="sandbox-pre"></pre>
-                                </div>
+                    <div class="sandbox-panel">
+                        <div class="sandbox-config">
+                            <div class="form-group">
+                                <label for="productSelect" class="sandbox-label">Product</label>
+                                <select id="productSelect" class="sandbox-input">
+                                    <option value="sig-normalizer">SIG Normalizer</option>
+                                    <option value="ndc-analysis">NDC Analysis</option>
+                                    <option value="medcast">Medcast</option>
+                                    <option value="pill-identifier">Pill Identifier</option>
+                                </select>
                             </div>
                         </div>
 
-                        <div class="sandbox-grid" data-product="ndc-analysis" style="display:none">
-                            <div class="sandbox-runner">
-                                <div class="form-group">
-                                    <label for="ndcInput" class="sandbox-label">NDC (10-digit with hyphens or 11-digit no hyphens)</label>
-                                    <input id="ndcInput" class="sandbox-input" type="text" inputmode="numeric" pattern="[0-9\-]*" placeholder="e.g., 12345-6789-0 or 01234567890" autocomplete="off" />
-                                </div>
-                                <div class="sandbox-actions">
-                                    <button id="runNdcBtn" class="btn btn-primary"><i class="fas fa-play"></i> Run</button>
-                                </div>
-
-                                <div class="sandbox-output">
-                                    <div class="output-header">
-                                        <h3>Response</h3>
-                                        <div class="output-actions">
-                                            <button id="copyOutputNdcBtn" class="btn btn-secondary"><i class="fas fa-copy"></i> Copy</button>
-                                        </div>
+                        <div>
+                            <div class="sandbox-grid" data-product="sig-normalizer">
+                                <div class="sandbox-runner">
+                                    <div class="form-group">
+                                        <label for="sigInput" class="sandbox-label">Pharmacy Instruction (SIG)</label>
+                                        <textarea id="sigInput" class="sandbox-textarea" rows="5" placeholder="1 tab po bid" maxlength="200"></textarea>
+                                        <div class="sandbox-hint">Max 200 characters.</div>
                                     </div>
-                                    <pre id="outputNdc" class="sandbox-pre"></pre>
+                                    <div class="sandbox-actions">
+                                        <button id="runSigBtn" class="btn btn-primary"><i class="fas fa-play"></i> Run</button>
+                                    </div>
+
+                                    <div class="sandbox-output">
+                                        <div class="output-header">
+                                            <h3>Response</h3>
+                                            <div class="output-actions">
+                                                <button id="copyOutputSigBtn" class="btn btn-secondary"><i class="fas fa-copy"></i> Copy</button>
+                                            </div>
+                                        </div>
+                                        <pre id="outputSig" class="sandbox-pre"></pre>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+
+                            <div class="sandbox-grid" data-product="ndc-analysis" style="display:none">
+                                <div class="sandbox-runner">
+                                    <div class="form-group">
+                                        <label for="ndcInput" class="sandbox-label">NDC (10-digit with hyphens or 11-digit no hyphens)</label>
+                                        <input id="ndcInput" class="sandbox-input" type="text" inputmode="numeric" pattern="[0-9\-]*" placeholder="e.g., 12345-6789-0 or 01234567890" autocomplete="off" />
+                                    </div>
+                                    <div class="sandbox-actions">
+                                        <button id="runNdcBtn" class="btn btn-primary"><i class="fas fa-play"></i> Run</button>
+                                    </div>
+
+                                    <div class="sandbox-output">
+                                        <div class="output-header">
+                                            <h3>Response</h3>
+                                            <div class="output-actions">
+                                                <button id="copyOutputNdcBtn" class="btn btn-secondary"><i class="fas fa-copy"></i> Copy</button>
+                                            </div>
+                                        </div>
+                                        <pre id="outputNdc" class="sandbox-pre"></pre>
+                                    </div>
+                                </div>
+                            </div>
 
                         <div class="sandbox-grid" data-product="medcast" style="display:none">
                             <div class="sandbox-runner">
@@ -181,7 +207,8 @@
         </section>
     </main>
 
+    </div>
+
     <script src="sandbox.js"></script>
 </body>
 </html>
-

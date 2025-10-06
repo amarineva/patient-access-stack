@@ -17,8 +17,10 @@ exports.normalizeSig = onRequest(
     const allowedOrigins = [
       'https://scriptability-patient-access.web.app',
       'https://scriptability-patient-access.firebaseapp.com',
-      'http://localhost:5000', // For local testing
-      'http://127.0.0.1:5000'  // For local testing
+      'http://localhost:5000', // Firebase Hosting emulator
+      'http://127.0.0.1:5000', // Firebase Hosting emulator
+      'http://localhost:8080', // Lightweight local testing server
+      'http://127.0.0.1:8080'  // Lightweight local testing server
     ];
     
     const origin = req.headers.origin;

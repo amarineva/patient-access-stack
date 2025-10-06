@@ -1,0 +1,26 @@
+{
+  "name": "scriptability-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Model Context Protocol server exposing ScriptAbility APIs as tools.",
+  "bin": {
+    "scriptability-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node ./index.js",
+    "start:http": "MCP_HTTP=1 MCP_STDIO=0 MCP_PORT=3333 node ./index.js",
+    "start:stdio": "MCP_STDIO=1 MCP_HTTP=0 node ./index.js",
+    "test:client": "node ./test-client.js"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.19.1",
+    "undici": "^6.19.8",
+    "mime-types": "^2.1.35",
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  }
+}

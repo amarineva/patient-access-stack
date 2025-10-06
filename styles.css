@@ -518,6 +518,71 @@ body.scriptability-theme {
     background: var(--background);
 }
 
+/* Sandbox Gate */
+.sandbox-gate {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    background: var(--background);
+}
+
+.sandbox-gate-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--white);
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    box-shadow: var(--shadow-lg);
+    padding: 2.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.sandbox-gate-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    text-align: center;
+}
+
+.sandbox-gate-header h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sandbox-gate-header p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.sandbox-gate-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.sandbox-gate-error {
+    min-height: 1.25rem;
+    color: var(--accent-color);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+@media (max-width: 600px) {
+    .sandbox-gate {
+        padding: 40px 16px;
+    }
+
+    .sandbox-gate-card {
+        padding: 2rem 1.5rem;
+    }
+}
+
 /* Sandbox */
 .sandbox-panel {
     display: grid;
