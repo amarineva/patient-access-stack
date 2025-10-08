@@ -78,7 +78,10 @@
                                     <option value="pill-identifier">Pill Identifier</option>
                                 </select>
                             </div>
-                            <!-- MCP toggle intentionally omitted until feature is production-ready -->
+                            <div class="form-group">
+                                <label class="sandbox-label">Agent Tools</label>
+                                <button id="mcpToggleBtn" class="btn btn-secondary" type="button"><i class="fas fa-robot"></i> MCP Tools</button>
+                            </div>
                         </div>
 
                         <div>
@@ -211,7 +214,7 @@
                                 <div class="form-group">
                                     <label for="mcpEndpoint" class="sandbox-label">MCP Endpoint (HTTPS)</label>
                                     <input id="mcpEndpoint" class="sandbox-input" type="url" placeholder="https://your-mcp-host.example.com/mcp" autocomplete="off" />
-                                    <div class="sandbox-hint">Must be HTTPS in production to avoid mixed content. Default for local: http://localhost:3434/mcp</div>
+                                    <div class="sandbox-hint">Must be HTTPS in production to avoid mixed content. Default for local: http://localhost:3333/mcp</div>
                                 </div>
 
                                 <div class="form-group">

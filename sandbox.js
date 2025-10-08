@@ -298,8 +298,9 @@
         const input = getEl('mcpEndpoint');
         let value = (input && input.value || '').trim();
         if (!value) {
-            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            value = isLocal ? 'http://localhost:3434/mcp' : '';
+            const host = window.location.hostname;
+            const isLocal = host === 'localhost' || host === '127.0.0.1';
+            value = isLocal ? 'http://localhost:3333/mcp' : 'https://scriptability-patient-access.web.app/mcp';
             if (input) input.value = value;
         }
         return value;
