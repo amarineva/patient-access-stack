@@ -364,6 +364,64 @@
         }
     }
 
+    async function fetchMcpStream(endpoint, message, includeProtocolHeader, onChunk) {
+        const headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json, text/event-stream'
+        };
+        if (includeProtocolHeader) {
+            headers['mcp-protocol-version'] = mcpState.protocolVersion || MCP_PROTOCOL_VERSION;
+        }
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(message)
+        });
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`HTTP ${res.status}: ${errText}`);
+        }
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (!ct.includes('text/event-stream') || !res.body || !res.body.getReader) {
+            const txt = await res.text();
+            try {
+                const json = JSON.parse(txt);
+                if (onChunk) onChunk(json);
+                return json;
+            } catch (_) {
+                if (onChunk) onChunk({ jsonrpc: '2.0', result: txt, id: null });
+                return { jsonrpc: '2.0', result: txt, id: null };
+            }
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let lastJson = null;
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+                if (line.startsWith('data:')) {
+                    const payload = line.slice(5).trim();
+                    if (payload) {
+                        try {
+                            const json = JSON.parse(payload);
+                            lastJson = json;
+                            if (onChunk) onChunk(json);
+                        } catch (_e) {
+                            // ignore parse errors for partial chunks
+                        }
+                    }
+                }
+            }
+        }
+        return lastJson;
+    }
+
     function toggleMcpPanel() {
         const panel = getEl('mcpPanel');
         if (!panel) return;
@@ -444,8 +502,11 @@
             const origHtml = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Listing';
             const message = { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} };
-            const data = await fetchMcp(endpoint, message, true);
-            out.textContent = JSON.stringify(data, null, 2);
+            out.textContent = '';
+            await fetchMcpStream(endpoint, message, true, (chunk) => {
+                const prefix = out.textContent ? '\n' : '';
+                out.textContent += prefix + JSON.stringify(chunk, null, 2);
+            });
             showToast('Fetched tools.', 'success');
             btn.innerHTML = origHtml;
         } catch (err) {
@@ -500,8 +561,11 @@
                 jsonrpc: '2.0', id: 3, method: 'tools/call',
                 params: { name: toolName, arguments: args }
             };
-            const data = await fetchMcp(endpoint, message, true);
-            out.textContent = JSON.stringify(data, null, 2);
+            out.textContent = '';
+            await fetchMcpStream(endpoint, message, true, (chunk) => {
+                const prefix = out.textContent ? '\n' : '';
+                out.textContent += prefix + JSON.stringify(chunk, null, 2);
+            });
             showToast('Tool call complete.', 'success');
             btn.innerHTML = origHtml;
         } catch (err) {

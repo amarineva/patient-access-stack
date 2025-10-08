@@ -57,6 +57,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }, triggerBtn ? 600 : 150);
     }
 
+    // Expose for modal handlers defined outside this scope
+    window.launchApp = launchApp;
+
     const launchButtons = document.querySelectorAll('.app-launch-btn');
     launchButtons.forEach(button => {
         button.addEventListener('click', function(e) {
@@ -362,7 +365,7 @@ function showAppDetails(appName, description, productKey) {
         launchBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             closeModal();
-            launchApp(productKey, appName);
+            window.launchApp(productKey, appName);
         });
     } else {
         launchBtn.addEventListener('click', function() {
