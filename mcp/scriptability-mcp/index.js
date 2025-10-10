@@ -13,7 +13,7 @@ const File = globalThis.File || undici.File;
 const Blob = globalThis.Blob || undici.Blob;
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { Storage } from "@google-cloud/storage";
 import mime from "mime-types";
 
 const SERVER_NAME = "scriptability-mcp";
@@ -27,6 +27,36 @@ const PICANALYSIS_ENDPOINT = "https://picanalysis.scriptability.net/analyze";
 const DEFAULT_SIG_MODEL = "gpt-4.1-mini";
 const PROMPT_ID = "pmpt_68d1aac7137081978a62cfad87ffd3730b5be593908223a0";
 const PROMPT_VERSION = "7";
+
+const OUTPUT_BUCKET = (process.env.MCP_OUTPUT_BUCKET || "").trim();
+const OUTPUT_OBJECT_PREFIX = (process.env.MCP_OUTPUT_OBJECT_PREFIX || "medcast").replace(/^\/+|\/+$/g, "");
+const OUTPUT_SIGNED_URL_SECONDS = (() => {
+  const raw = process.env.MCP_OUTPUT_SIGNED_URL_SECONDS;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 3600;
+})();
+const OUTPUT_PUBLIC_READ = (() => {
+  const raw = (process.env.MCP_OUTPUT_PUBLIC_READ || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+})();
+const FORCE_DL_ONLY = (() => {
+  const raw = (process.env.MCP_FORCE_DOWNLOAD_URL_ONLY || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+})();
+const AUTO_WAIT_MS = (() => {
+  const raw = process.env.MCP_MEDCAST_AUTO_WAIT_MS;
+  if (!raw) return 0;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+})();
+const FORCE_ATTACHMENT = (() => {
+  const raw = (process.env.MCP_MEDCAST_FORCE_ATTACHMENT || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+})();
+let storage = null;
+if (OUTPUT_BUCKET) {
+  storage = new Storage();
+}
 
 function extractResponseText(data) {
   if (!data) return "";
@@ -79,8 +109,98 @@ function toJsonContent(value) {
   return { content: [{ type: "text", text }] };
 }
 
+function toTextContent(text) {
+  return { content: [{ type: "text", text: String(text) }] };
+}
+
 function errorContent(message) {
   return { content: [{ type: "text", text: `Error: ${message}` }] };
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+const jobs = new Map();
+const jobPromises = new Map();
+
+function createJob(type) {
+  const jobId = randomUUID();
+  const timestamp = nowIso();
+  const job = {
+    id: jobId,
+    type,
+    status: "pending",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  jobs.set(jobId, job);
+  return job;
+}
+
+function getJob(jobId) {
+  return jobs.get(jobId);
+}
+
+function updateJob(jobId, updates) {
+  const job = jobs.get(jobId);
+  if (!job) return null;
+  const next = { ...job, ...updates, updatedAt: nowIso() };
+  jobs.set(jobId, next);
+  return next;
+}
+
+function serializeJob(job) {
+  if (!job) return null;
+  const base = getPublicBaseUrl();
+  const preferredUrl = job.downloadUrl || (base ? `${base}/files/medcast/${job.id}` : null);
+  // Put url first for better linkification in some clients
+  const serialized = {
+    url: preferredUrl || undefined,
+    downloadUrl: job.downloadUrl,
+    signedUrl: job.signedUrl,
+    id: job.id,
+    type: job.type,
+    status: job.status,
+    path: job.path,
+    error: job.error,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  };
+  return serialized;
+}
+
+function getPublicBaseUrl() {
+  const base = (process.env.MCP_PUBLIC_BASE_URL || process.env.MCP_BASE_URL || "").trim();
+  if (!base) return "";
+  return base.endsWith("/") ? base.slice(0, -1) : base;
+}
+
+function buildDownloadUrl(jobId) {
+  const base = getPublicBaseUrl();
+  if (!base) return null;
+  return `${base}/files/medcast/${jobId}`;
+}
+
+function resolveDownloadUrl(jobId, signedUrl) {
+  const routeUrl = buildDownloadUrl(jobId);
+  return routeUrl || signedUrl || null;
+}
+
+function streamGcsFile(file, res, filename) {
+  res.setHeader("Content-Type", "audio/wav");
+  const disposition = FORCE_ATTACHMENT ? "attachment" : "inline";
+  res.setHeader("Content-Disposition", `${disposition}; filename="${filename}"`);
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  const stream = file.createReadStream();
+  stream.on("error", (err) => {
+    if (!res.headersSent) {
+      res.status(500).json({ error: String(err?.message || err) });
+    } else {
+      res.destroy(err);
+    }
+  });
+  stream.pipe(res);
 }
 
 const server = new Server({ name: SERVER_NAME, version: SERVER_VERSION }, { capabilities: { tools: {} } });
@@ -189,7 +309,8 @@ tools.set("medcast_generate_podcast", {
       files: { type: "array", items: { type: "string" }, description: "Local file paths (.txt, .md, .pdf, .docx). Max 10, each <=5MB, total <=10MB" },
       text: { type: "string", description: "Free text source" },
       ndc: { type: "string", description: "NDC number (optional)" },
-      outputDir: { type: "string", description: "Directory to save output WAV. Defaults to ./mcp_outputs/medcast" }
+      outputDir: { type: "string", description: "Directory to save output WAV. Defaults to ./mcp_outputs/medcast" },
+      waitMs: { type: "number", description: "Optional: block this call up to N ms for completion; returns final status if finished in time" }
     }
   },
   async invoke(input) {
@@ -202,64 +323,149 @@ tools.set("medcast_generate_podcast", {
         return errorContent("Provide at least one of: files, text, or ndc.");
       }
 
-      // Validate and build form data
-      const allowedExt = [".txt", ".md", ".pdf", ".docx"];
-      let totalBytes = 0;
-      const formData = new FormData();
+      const job = createJob("medcast");
 
-      for (const p of filePaths) {
-        const stats = await fs.stat(path.resolve(p));
-        totalBytes += stats.size;
-        if (stats.size > 5 * 1024 * 1024) {
-          return errorContent(`File too large (>5MB): ${p}`);
+      const processPromise = processMedcastJob(job.id, {
+        filePaths,
+        sourceText,
+        ndcRaw,
+        outputDir: input.outputDir ? String(input.outputDir) : undefined,
+      });
+
+      jobPromises.set(job.id, processPromise);
+      processPromise.finally(() => { jobPromises.delete(job.id); });
+
+      processPromise.catch((err) => {
+        const message = err && err.message ? err.message : String(err);
+        updateJob(job.id, { status: "failed", error: message });
+      });
+
+      const requestedWait = Number.isFinite(input.waitMs) ? Number(input.waitMs) : 0;
+      const effectiveWait = Math.max(requestedWait, AUTO_WAIT_MS);
+      if (effectiveWait > 0) {
+        await waitForJob(job.id, effectiveWait);
+        const done = getJob(job.id);
+        if (FORCE_DL_ONLY && done && done.status === "succeeded") {
+          const s = serializeJob(done);
+          const url = s?.url || s?.downloadUrl || s?.signedUrl || "";
+          return toTextContent(String(url));
         }
-        if (totalBytes > 10 * 1024 * 1024) {
-          return errorContent("Total attachment size exceeds 10MB.");
-        }
-        const lower = p.toLowerCase();
-        if (!allowedExt.some((ext) => lower.endsWith(ext))) {
-          return errorContent(`Unsupported file type: ${p}`);
-        }
-        const fileObj = await readFileAsFileObject(p);
-        formData.append("source_files", fileObj, fileObj.name);
+        return toJsonContent(serializeJob(done));
       }
-
-      if (sourceText) formData.append("source_text", sourceText);
-      if (ndcRaw) formData.append("ndc_number", ndcRaw);
-
-      const endpoint = `${MEDCAST_BASE}/generate_podcast`;
-      const controller = new AbortController();
-      const timeoutMs = 180000; // 3 minutes
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      let res;
-      try {
-        res = await fetch(endpoint, { method: "POST", body: formData, signal: controller.signal });
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      if (!res.ok) {
-        let errText = await res.text();
-        try { errText = JSON.stringify(JSON.parse(errText), null, 2); } catch {}
-        return errorContent(`URL: ${endpoint}\nStatus: ${res.status}\nResponse: ${errText}`);
-      }
-
-      const arrayBuffer = await res.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      const baseOutDir = path.resolve(process.cwd(), input.outputDir ? String(input.outputDir) : path.join("mcp_outputs", "medcast"));
-      await ensureDirectory(baseOutDir);
-      const outPath = path.join(baseOutDir, `output-${nowTimestamp()}.wav`);
-      await fs.writeFile(outPath, buffer);
-
-      return toJsonContent({ message: "Podcast generated", path: outPath });
+      return toJsonContent({ jobId: job.id, status: job.status });
     } catch (err) {
       const details = err && err.name === "AbortError" ? "Request timed out (3 min)." : String(err.message || err);
       return errorContent(details);
     }
   }
 });
+
+async function processMedcastJob(jobId, { filePaths, sourceText, ndcRaw, outputDir }) {
+  updateJob(jobId, { status: "running" });
+
+  try {
+    const allowedExt = [".txt", ".md", ".pdf", ".docx"];
+    let totalBytes = 0;
+    const formData = new FormData();
+
+    for (const p of filePaths) {
+      const absolute = path.resolve(p);
+      const stats = await fs.stat(absolute);
+      totalBytes += stats.size;
+      if (stats.size > 5 * 1024 * 1024) {
+        throw new Error(`File too large (>5MB): ${p}`);
+      }
+      if (totalBytes > 10 * 1024 * 1024) {
+        throw new Error("Total attachment size exceeds 10MB.");
+      }
+      const lower = p.toLowerCase();
+      if (!allowedExt.some((ext) => lower.endsWith(ext))) {
+        throw new Error(`Unsupported file type: ${p}`);
+      }
+      const fileObj = await readFileAsFileObject(absolute);
+      formData.append("source_files", fileObj, fileObj.name);
+    }
+
+    if (sourceText) formData.append("source_text", sourceText);
+    if (ndcRaw) formData.append("ndc_number", ndcRaw);
+
+    const endpoint = `${MEDCAST_BASE}/generate_podcast`;
+    const controller = new AbortController();
+    const timeoutMs = 180000; // 3 minutes
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    let res;
+    try {
+      res = await fetch(endpoint, { method: "POST", body: formData, signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!res.ok) {
+      let errText = await res.text();
+      try { errText = JSON.stringify(JSON.parse(errText), null, 2); } catch {}
+      throw new Error(`URL: ${endpoint}\nStatus: ${res.status}\nResponse: ${errText}`);
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    let outPath = null;
+    let downloadUrl = null;
+    let signedUrl = null;
+
+    if (storage && OUTPUT_BUCKET) {
+      const objectName = `${OUTPUT_OBJECT_PREFIX}/${jobId}/output-${nowTimestamp()}.wav`;
+      const bucket = storage.bucket(OUTPUT_BUCKET);
+      const file = bucket.file(objectName);
+      await file.save(buffer, { contentType: "audio/wav" });
+      outPath = `gs://${OUTPUT_BUCKET}/${objectName}`;
+      if (OUTPUT_PUBLIC_READ) {
+        try {
+          await file.makePublic();
+          downloadUrl = `https://storage.googleapis.com/${OUTPUT_BUCKET}/${objectName}`;
+        } catch (err) {
+          // Public access prevention may block makePublic; fall back to signed URL
+          console.warn(`[medcast] makePublic failed for ${objectName}: ${err?.message || err}`);
+        }
+      }
+      const [signed] = await file.getSignedUrl({ version: "v4", action: "read", expires: Date.now() + OUTPUT_SIGNED_URL_SECONDS * 1000 });
+      signedUrl = signed;
+      downloadUrl = resolveDownloadUrl(jobId, downloadUrl || signed);
+    } else {
+      const resolvedOutputDir = outputDir ? path.resolve(process.cwd(), outputDir) : path.resolve(process.cwd(), path.join("mcp_outputs", "medcast"));
+      await ensureDirectory(resolvedOutputDir);
+      outPath = path.join(resolvedOutputDir, `output-${nowTimestamp()}.wav`);
+      await fs.writeFile(outPath, buffer);
+      downloadUrl = resolveDownloadUrl(jobId, null);
+    }
+
+    const updated = updateJob(jobId, { status: "succeeded", path: outPath, downloadUrl, signedUrl });
+  } catch (err) {
+    const message = err && err.name === "AbortError" ? "Request timed out (3 min)." : String(err.message || err);
+    updateJob(jobId, { status: "failed", error: message });
+  }
+}
+
+async function waitForJob(jobId, waitMs) {
+  const promise = jobPromises.get(jobId);
+  if (!promise) {
+    // Job may have completed already; return immediately
+    return getJob(jobId);
+  }
+  if (!Number.isFinite(waitMs) || waitMs <= 0) {
+    return getJob(jobId);
+  }
+  try {
+    await Promise.race([
+      promise,
+      new Promise((resolve) => setTimeout(resolve, waitMs)),
+    ]);
+  } catch (e) {
+    // ignore; status will be read below
+  }
+  return getJob(jobId);
+}
 
 tools.set("pill_identifier", {
   name: "pill_identifier",
@@ -316,6 +522,49 @@ tools.set("pill_identifier", {
       return errorContent(err.message || String(err));
     }
   }
+});
+
+tools.set("medcast_job_status", {
+  name: "medcast_job_status",
+  description: "Check the status of a Medcast podcast job started via medcast_generate_podcast.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      jobId: { type: "string", description: "Job identifier returned by medcast_generate_podcast" },
+      waitMs: { type: "number", description: "Optional: block this call up to N ms for completion; returns final status if finished in time" },
+    },
+    required: ["jobId"],
+  },
+  async invoke(input) {
+    const jobId = String(input.jobId || "").trim();
+    if (!jobId) {
+      return errorContent("Missing 'jobId'.");
+    }
+
+    const job = getJob(jobId);
+    if (!job) {
+      return errorContent(`Unknown job: ${jobId}`);
+    }
+
+    const requestedWait = Number.isFinite(input.waitMs) ? Number(input.waitMs) : 0;
+    const canWait = job.status === "pending" || job.status === "running";
+    const effectiveWait = canWait ? Math.max(requestedWait, AUTO_WAIT_MS) : 0;
+    if (effectiveWait > 0 && canWait) {
+      const after = await waitForJob(jobId, effectiveWait);
+      if (FORCE_DL_ONLY && after && after.status === "succeeded") {
+        const s = serializeJob(after);
+        const url = s?.url || s?.downloadUrl || s?.signedUrl || "";
+        return toTextContent(String(url));
+      }
+      return toJsonContent(serializeJob(after));
+    }
+    if (FORCE_DL_ONLY && job && job.status === "succeeded") {
+      const s = serializeJob(job);
+      const url = s?.url || s?.downloadUrl || s?.signedUrl || "";
+      return toTextContent(String(url));
+    }
+    return toJsonContent(serializeJob(job));
+  },
 });
 
 // Tool handlers
@@ -387,6 +636,45 @@ async function startHttpIfRequested() {
 
   app.delete("/mcp", async (req, res) => {
     await transport.handleRequest(req, res);
+  });
+
+  // Signed or public download route for completed Medcast jobs
+  // Download route: stateless fallback to GCS if in-memory job not present
+  app.get("/files/medcast/:jobId", async (req, res) => {
+    try {
+      const jobId = String(req.params.jobId || "").trim();
+      let job = getJob(jobId);
+      if (!job && storage && OUTPUT_BUCKET) {
+        // Try to find object by prefix: medcast/<jobId>/
+        const [files] = await storage.bucket(OUTPUT_BUCKET).getFiles({ prefix: `${OUTPUT_OBJECT_PREFIX}/${jobId}/`, maxResults: 1 });
+        if (files && files.length > 0) {
+          const file = files[0];
+          streamGcsFile(file, res, path.basename(file.name));
+          return;
+        }
+      }
+      if (!job) return res.status(404).json({ error: "Job not found" });
+      if (job.status !== "succeeded" || !job.path) return res.status(409).json({ error: "Job not completed" });
+      if (storage && job.path && job.path.startsWith("gs://")) {
+        const withoutScheme = job.path.replace(/^gs:\/\//, "");
+        const [bucketName, ...objectParts] = withoutScheme.split("/");
+        if (!bucketName) {
+          return res.status(500).json({ error: "Configured output path is missing a bucket name." });
+        }
+        const objectName = objectParts.join("/");
+        const file = storage.bucket(bucketName).file(objectName);
+        streamGcsFile(file, res, path.basename(objectName));
+        return;
+      }
+      const absolutePath = path.resolve(job.path);
+      res.setHeader("Content-Type", "audio/wav");
+      const disposition = FORCE_ATTACHMENT ? "attachment" : "inline";
+      res.setHeader("Content-Disposition", `${disposition}; filename="${path.basename(absolutePath)}"`);
+      const read = await fs.readFile(absolutePath);
+      res.status(200).end(read);
+    } catch (e) {
+      res.status(500).json({ error: String(e?.message || e) });
+    }
   });
 
   app.listen(port, () => {

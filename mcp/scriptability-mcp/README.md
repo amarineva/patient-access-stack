@@ -4,7 +4,7 @@ Expose ScriptAbility APIs as MCP tools for AI agents (Claude Desktop, Cursor, et
 
 - **SIG Normalizer**: Routes to your Firebase Function proxy (keeps API key server-side)
 - **NDC Analysis**: Queries descriptor API for NDC details
-- **Medcast**: Generates a WAV podcast, saved locally
+- **Medcast**: Generates a WAV podcast via async job flow, saved locally
 - **Pill Identifier**: Analyzes a medication image against expected medication
 
 ### Prerequisites
@@ -62,7 +62,11 @@ Restart Claude Desktop. You should see the "scriptability" server load in the To
   - Output: JSON text of descriptor
 - **medcast_generate_podcast**
   - Inputs: `files` (string[]), `text` (string), `ndc` (string), `outputDir` (string)
-  - Output: JSON text `{ message, path }`; WAV saved to `./mcp_outputs/medcast` by default
+  - Output: JSON text `{ jobId, status }`; initial status is `pending`. If `waitMs` is provided (or `MCP_MEDCAST_AUTO_WAIT_MS` is configured), returns the final job state if it completes in time. On success, includes `path`, `downloadUrl`, and `signedUrl`. When `MCP_PUBLIC_BASE_URL` is set, `downloadUrl` points to `<base>/files/medcast/:jobId` which streams (or downloads, if `MCP_MEDCAST_FORCE_ATTACHMENT=1`) the WAV from Cloud Run. `signedUrl` contains the direct Google Cloud Storage signed link for fallback.
+- **medcast_job_status**
+  - Inputs: `jobId` (string)
+  - Output: JSON text `{ id, type, status, path?, error?, createdAt, updatedAt }`
+  - Notes: Poll until `status` becomes `succeeded` (then `path` is available) or `failed`
 - **pill_identifier**
   - Inputs: `name` (string), `ndc11` (string, 11 digits), `imagePath` (string), `description` (string?)
   - Output: JSON text of analysis
@@ -75,7 +79,12 @@ Restart Claude Desktop. You should see the "scriptability" server load in the To
 
 ### Notes & Troubleshooting
 - The SIG function enforces an allowed `Origin`. This server sets `Origin: https://scriptability-patient-access.web.app`. If you lock this down further, update `index.js`.
-- Medcast responses are WAV bytes; this server writes to disk to avoid huge inline responses.
+- Medcast requests run asynchronously; start with `medcast_generate_podcast`, optionally pass `waitMs` to block, or poll `medcast_job_status`. Set `MCP_OUTPUT_BUCKET` to write results to Cloud Storage (signed URL returned). If using local disk, set `MCP_PUBLIC_BASE_URL` and keep `/files/medcast/:jobId` accessible.
+- When deploying to Cloud Run, set `MCP_PUBLIC_BASE_URL` (e.g., `https://scriptability-mcp-xxxxx-uc.a.run.app`) so the tool shares the friendly streaming link served by `/files/medcast/:jobId`.
+- To emit publicly shareable Google Cloud Storage links (no signed query string), set `MCP_OUTPUT_PUBLIC_READ=1`. Objects will be uploaded with `publicRead` access and the tool returns the direct `https://storage.googleapis.com/<bucket>/<object>` URL alongside the signed link.
+- To force agents to use only the streaming link, set `MCP_FORCE_DOWNLOAD_URL_ONLY=1`. In this mode, when a job is complete the tool returns a plain text body containing only the `downloadUrl` and omits other link-like fields that could confuse clients.
+- Set `MCP_MEDCAST_AUTO_WAIT_MS` (e.g., `180000`) to enforce a minimum wait time for Medcast jobs. Even if a caller supplies a smaller `waitMs`, the tool will wait at least this long before responding, so agents generally get the finished link in one round-trip.
+- Set `MCP_MEDCAST_FORCE_ATTACHMENT=1` if you prefer browsers to download the WAV instead of streaming inline; this toggles the `Content-Disposition` header from `inline` to `attachment` for Cloud Run and local responses.
 - Ensure file paths passed to tools are accessible to the server process.
 - If your Node doesn't support `fetch`/`FormData`, this package vendors `undici` and uses it explicitly.
 

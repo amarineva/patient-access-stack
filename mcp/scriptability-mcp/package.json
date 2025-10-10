@@ -17,10 +17,11 @@
     "node": ">=18.17.0"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.17.2",
     "@modelcontextprotocol/sdk": "^1.19.1",
-    "undici": "^6.19.8",
-    "mime-types": "^2.1.35",
+    "cors": "^2.8.5",
     "express": "^4.19.2",
-    "cors": "^2.8.5"
+    "mime-types": "^2.1.35",
+    "undici": "^6.19.8"
   }
 }

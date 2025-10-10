@@ -1,19 +1,24 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Front-end assets live at `index.html`, `styles.css`, and `script.js`, with supporting media in `assets/`. Production-ready bundles are checked into `dist/assets/`; update them only when a release is imminent. Use `sandbox.html` and `sandbox.js` for experimental flows and keep unfinished work isolated there. Backend automation resides in `functions/` (Node 22) alongside its own `package.json`; `firebase.json` ties hosting and Cloud Functions together.
+Front-end sources live at `index.html`, `styles.css`, and `script.js`, with shared media under `assets/`. Use `sandbox.html` and `sandbox.js` for experiments; keep unfinished flows there until promoted. Production bundles are checked into `dist/assets/`—only refresh them when a release is ready. Backend automation sits in `functions/` (Node 22) with its own `package.json`; Cloud Functions deploy from `functions/index.js`. Hosting and function routing are coordinated through `firebase.json`.
 
 ## Build, Test, and Development Commands
-Install Firebase function deps with `cd functions && npm install`. Run the functions emulator via `npm run serve` from the same folder when iterating on `normalizeSig`. For an end-to-end local check, use `firebase emulators:start --only hosting,functions` at the repo root (requires logged-in Firebase CLI). Deploy updated functions with `npm run deploy`; follow with `firebase deploy --only hosting` if front-end files changed.
+- `cd functions && npm install`: install function dependencies after cloning or pulling backend changes.
+- `cd functions && npm run serve`: launch the functions emulator while iterating on `normalizeSig`.
+- `firebase emulators:start --only hosting,functions`: run an end-to-end local stack; requires Firebase CLI login.
+- `cd functions && npm run deploy`: deploy updated Cloud Functions.
+- `firebase deploy --only hosting`: publish front-end updates after assets change.
 
 ## Coding Style & Naming Conventions
-Match existing indentation: 4 spaces in front-end scripts, 2 spaces inside Cloud Functions. Favor `const`/`let`, camelCase for JS variables, and kebab-case for file names (e.g., `sig-normalizer`). Keep DOM selectors and data attributes descriptive and lowercase. When touching CSS, group related rules and reuse custom properties instead of duplicating color tokens.
+Use 4-space indentation in front-end scripts and 2-space indentation inside Cloud Functions. Prefer `const`/`let`, camelCase for variables, and kebab-case file names (e.g., `sig-normalizer`). Keep DOM selectors and data attributes lowercase and descriptive. Reuse CSS custom properties instead of duplicating colors. Commit only ASCII content unless extending existing Unicode.
 
 ## Testing Guidelines
-There is no automated test suite yet—perform manual checks in `sandbox.html` and the main `index.html`. Exercise critical launches (SIG Normalizer, Pill Identifier) after every change. While running emulators, watch terminal output and the Firebase logs (`npm run logs`) for errors. Document reproducible manual test steps in your PR description to aid reviewers.
+No automated suite exists yet. Manually exercise critical flows in both `index.html` and `sandbox.html`, covering SIG Normalizer and Pill Identifier launches. When emulators run, monitor terminal output plus Firebase logs via `npm run logs`. Document reproducible test steps in PRs so reviewers can replay them.
 
 ## Commit & Pull Request Guidelines
-Use clear, sentence-style commit subjects that summarize the change (“Refine medication analysis validation”). Group related edits into a single commit to keep history readable. PRs should include context, screenshots or GIFs for UI updates, and links to tracked issues. Call out required secrets or config steps so deployers can replicate the setup.
+Write sentence-style commit subjects that summarize the change (e.g., “Refine medication analysis validation”). Group related edits per commit. PRs should include context, linked issues, and screenshots or GIFs for UI changes. Call out any required secrets or config steps to help deployers reproduce the environment.
 
 ## Security & Configuration Tips
-Store secrets with Firebase (`firebase functions:secrets:set OPENAI_SIG_API_KEY`) and never commit `.env` files. Restrict new origins in `functions/index.js` to vetted hosts. Validate user-provided text before passing it to external APIs, and prefer parameterized utilities over inline fetch logic when expanding backend features.
+Store secrets with Firebase (`firebase functions:secrets:set OPENAI_SIG_API_KEY`) and avoid committing `.env` files. Restrict allowed origins in `functions/index.js` to vetted hosts. Validate user-provided text before sending it to external APIs, and favor reusable utilities instead of inline fetch logic when expanding backend features.
+

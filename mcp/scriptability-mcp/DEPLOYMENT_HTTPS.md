@@ -24,26 +24,34 @@ ENV MCP_PORT=8080
 CMD ["node", "index.js"]
 ```
 
-2. **Build and push to Google Container Registry**:
+2. **Build and push an image** (Cloud Build → Artifact/Container Registry):
 ```bash
 cd mcp/scriptability-mcp
 gcloud config set project scriptability-patient-access
-gcloud builds submit --tag gcr.io/scriptability-patient-access/scriptability-mcp:latest
+# Versioned tag recommended for clear rollouts
+IMAGE="gcr.io/scriptability-patient-access/scriptability-mcp:$(date +%Y%m%d-%H%M%S)"
+gcloud builds submit --tag "$IMAGE"
 ```
 
-3. **Deploy to Cloud Run**:
+3. **Deploy to Cloud Run** (use env file to avoid comma-escaping issues):
 ```bash
+cat >/tmp/mcp-env.yaml <<'EOF'
+MCP_HTTP: "1"
+MCP_PORT: "8080"
+MCP_ALLOWED_ORIGINS: "https://scriptability-patient-access.web.app,https://scriptability-patient-access.firebaseapp.com"
+EOF
+
 gcloud run deploy scriptability-mcp \
-  --image gcr.io/scriptability-patient-access/scriptability-mcp:latest \
+  --image "$IMAGE" \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars="MCP_HTTP=1,MCP_PORT=8080,MCP_ALLOWED_ORIGINS=https://scriptability-patient-access.web.app,https://scriptability-patient-access.firebaseapp.com"
+  --env-vars-file=/tmp/mcp-env.yaml
 ```
 
 4. **Note the service URL** (e.g., `https://scriptability-mcp-xxxx-uc.a.run.app`)
 
-5. **Update Sandbox**: Use the Cloud Run URL + `/mcp` as the endpoint in the Sandbox MCP section.
+5. **Hosting integration**: Firebase Hosting rewrites `/mcp` to this Cloud Run service (see `firebase.json`). The Sandbox should call `/mcp` on your hosting domain; you can also call the Cloud Run URL directly.
 
 ## Option 2: Firebase Hosting with Cloud Functions
 
@@ -88,6 +96,30 @@ Once deployed, test from the Sandbox:
 2. Click "Connect"
 3. Verify status shows "Connected"
 4. Try "List Tools" and a tool call
+
+Direct curl tests (Cloud Run URL). The server requires Accept for both JSON and SSE:
+
+```bash
+SERVICE_URL="https://scriptability-mcp-xxxx-uc.a.run.app"
+
+# List tools
+curl -sS -X POST "$SERVICE_URL/mcp" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+# Start Medcast job and wait up to 180s in the same call
+curl -sS -X POST "$SERVICE_URL/mcp" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  --data '{"jsonrpc":"2.0","id":"start","method":"tools/call","params":{"name":"medcast_generate_podcast","arguments":{"text":"Hello world","waitMs":180000}}}'
+
+# Optional: Poll status with long-poll wait
+curl -sS -X POST "$SERVICE_URL/mcp" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  --data '{"jsonrpc":"2.0","id":"status","method":"tools/call","params":{"name":"medcast_job_status","arguments":{"jobId":"<JOB_ID>","waitMs":30000}}}'
+```
 
 ## Cost Estimates (Cloud Run)
 
