@@ -68,8 +68,10 @@ Restart Claude Desktop. You should see the "scriptability" server load in the To
   - Output: JSON text `{ id, type, status, path?, error?, createdAt, updatedAt }`
   - Notes: Poll until `status` becomes `succeeded` (then `path` is available) or `failed`
 - **pill_identifier**
-  - Inputs: `name` (string), `ndc11` (string, 11 digits), `imagePath` (string), `description` (string?)
+  - Inputs: `name` (string), `ndc11` (string, 11 digits), `imageUrl` (https); optional `description` (string)
   - Output: JSON text of analysis
+  - Notes: Only publicly accessible HTTPS URLs are supported. Max size 5MB; allowed types: JPG, PNG, GIF, WebP.
+  - Example: `imageUrl: "https://www.drugs.com/images/pills/fio/AUR00140/amoxicillin-trihydrate.JPG"`
 
 ### Endpoints Used
 - SIG Normalizer: `https://normalizesig-z4vamvc43a-uc.a.run.app` (Firebase Functions Gen2)
@@ -87,6 +89,11 @@ Restart Claude Desktop. You should see the "scriptability" server load in the To
 - Set `MCP_MEDCAST_FORCE_ATTACHMENT=1` if you prefer browsers to download the WAV instead of streaming inline; this toggles the `Content-Disposition` header from `inline` to `attachment` for Cloud Run and local responses.
 - Ensure file paths passed to tools are accessible to the server process.
 - If your Node doesn't support `fetch`/`FormData`, this package vendors `undici` and uses it explicitly.
+
+### Environment Flags
+- `MCP_MEDCAST_AUTO_WAIT_MS` — minimum wait duration (ms) for Medcast jobs when the caller supplies a shorter `waitMs`.
+- `MCP_HTTP_MAX_WAIT_MS` — caps Medcast wait durations when running in HTTP mode (`MCP_HTTP=1`). Defaults to `25000` to avoid Cloud Run / load balancer 502s on long-held requests. Set a larger value if your HTTP deployment can safely handle longer waits.
+- `MCP_HTTP_INLINE_WAIT` — set to `1` to allow HTTP callers to wait inside the initial `medcast_generate_podcast` call (subject to the clamp above). Defaults to `0` so HTTP responses return immediately with a job ID, avoiding HTTP timeout issues.
 
 Hosting guidance:
 - For production, front this service with HTTPS and restrict allowed hosts/origins in the HTTP transport if needed.

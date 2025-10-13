@@ -11,7 +11,8 @@
     "start": "node ./index.js",
     "start:http": "MCP_HTTP=1 MCP_STDIO=0 MCP_PORT=3333 node ./index.js",
     "start:stdio": "MCP_STDIO=1 MCP_HTTP=0 node ./index.js",
-    "test:client": "node ./test-client.js"
+    "test:client": "node ./test-client.js",
+    "lifecycle:set:uploads": "node ./scripts/set-lifecycle.js --days=1"
   },
   "engines": {
     "node": ">=18.17.0"

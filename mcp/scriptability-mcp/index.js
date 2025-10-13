@@ -3,7 +3,6 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import express from "express";
 import cors from "cors";
-import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { InMemoryEventStore } from "@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -53,9 +52,57 @@ const FORCE_ATTACHMENT = (() => {
   const raw = (process.env.MCP_MEDCAST_FORCE_ATTACHMENT || "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 })();
+
+const HTTP_MODE = (() => {
+  const raw = (process.env.MCP_HTTP || "").trim().toLowerCase();
+  if (!raw) return false;
+  return raw === "1" || raw === "true" || raw === "yes";
+})();
+
+const DEFAULT_HTTP_WAIT_CAP_MS = 25000;
+const HTTP_MAX_WAIT_MS = (() => {
+  const raw = process.env.MCP_HTTP_MAX_WAIT_MS;
+  if (!raw) return HTTP_MODE ? DEFAULT_HTTP_WAIT_CAP_MS : Infinity;
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return HTTP_MODE ? DEFAULT_HTTP_WAIT_CAP_MS : Infinity;
+  }
+  return parsed;
+})();
+
+const HTTP_INLINE_WAIT_ENABLED = (() => {
+  if (!HTTP_MODE) return true;
+  const raw = (process.env.MCP_HTTP_INLINE_WAIT || "").trim().toLowerCase();
+  if (!raw) return false;
+  return raw === "1" || raw === "true" || raw === "yes";
+})();
+
+function clampWaitDuration(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return 0;
+  if (!Number.isFinite(HTTP_MAX_WAIT_MS) || HTTP_MAX_WAIT_MS <= 0) return ms;
+  return ms > HTTP_MAX_WAIT_MS ? HTTP_MAX_WAIT_MS : ms;
+}
+
+function maybeLogWaitClamp(label, requested, clamped) {
+  if (!HTTP_MODE) return;
+  if (!Number.isFinite(requested) || !Number.isFinite(clamped)) return;
+  if (requested > clamped) {
+    console.warn(`[${label}] wait duration capped at ${clamped}ms (requested ${requested}ms). Avoid long waits over HTTP to prevent load balancer 502s.`);
+  }
+}
+
 let storage = null;
 if (OUTPUT_BUCKET) {
   storage = new Storage();
+}
+
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+function makeError(message, statusCode = 400) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
 }
 
 function extractResponseText(data) {
@@ -77,24 +124,6 @@ function extractResponseText(data) {
   return "";
 }
 
-async function ensureDirectory(dirPath) {
-  await fs.mkdir(dirPath, { recursive: true });
-}
-
-function nowTimestamp() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return (
-    d.getFullYear() +
-    pad(d.getMonth() + 1) +
-    pad(d.getDate()) +
-    "-" +
-    pad(d.getHours()) +
-    pad(d.getMinutes()) +
-    pad(d.getSeconds())
-  );
-}
-
 async function readFileAsFileObject(filePath) {
   const absolutePath = path.resolve(filePath);
   const data = await fs.readFile(absolutePath);
@@ -102,6 +131,40 @@ async function readFileAsFileObject(filePath) {
   const mimeType = mime.lookup(base) || "application/octet-stream";
   const blob = new Blob([data], { type: mimeType });
   return new File([blob], base, { type: mimeType });
+}
+
+function ensureAllowedImageType(mimeType) {
+  if (!ALLOWED_IMAGE_TYPES.has(mimeType)) {
+    throw makeError("Unsupported image format. Use JPG, PNG, GIF, or WebP.");
+  }
+}
+
+async function fileFromUrl(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    const res = await fetch(url, { method: "GET", signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch image URL: HTTP ${res.status}`);
+    }
+    const contentTypeHeader = res.headers.get("content-type") || "";
+    const urlObj = new URL(url);
+    const baseName = path.basename(urlObj.pathname || "upload");
+    const inferredFromExt = mime.lookup(baseName) || "";
+    const mimeType = contentTypeHeader.split(";")[0].trim() || inferredFromExt || "application/octet-stream";
+    ensureAllowedImageType(mimeType);
+    const arrayBuffer = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    if (buffer.length > MAX_IMAGE_BYTES) {
+      throw new Error("Image is too large. Max size is 5MB.");
+    }
+    const ext = mime.extension(mimeType) || "bin";
+    const safeName = baseName && baseName.includes(".") ? baseName : `upload.${ext}`;
+    const blob = new Blob([buffer], { type: mimeType });
+    return new File([blob], safeName, { type: mimeType });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function toJsonContent(value) {
@@ -125,7 +188,7 @@ const jobs = new Map();
 const jobPromises = new Map();
 
 function createJob(type) {
-  const jobId = randomUUID();
+  const jobId = nowIso(); // Changed to nowIso()
   const timestamp = nowIso();
   const job = {
     id: jobId,
@@ -341,7 +404,16 @@ tools.set("medcast_generate_podcast", {
       });
 
       const requestedWait = Number.isFinite(input.waitMs) ? Number(input.waitMs) : 0;
-      const effectiveWait = Math.max(requestedWait, AUTO_WAIT_MS);
+      let shouldWait = AUTO_WAIT_MS > 0 || requestedWait > 0;
+      if (HTTP_MODE && !HTTP_INLINE_WAIT_ENABLED) {
+        shouldWait = false;
+      }
+
+      const baseWait = shouldWait ? Math.max(requestedWait, AUTO_WAIT_MS) : 0;
+      const effectiveWait = shouldWait ? clampWaitDuration(baseWait) : 0;
+      if (shouldWait) {
+        maybeLogWaitClamp("medcast_generate_podcast", baseWait, effectiveWait);
+      }
       if (effectiveWait > 0) {
         await waitForJob(job.id, effectiveWait);
         const done = getJob(job.id);
@@ -352,7 +424,10 @@ tools.set("medcast_generate_podcast", {
         }
         return toJsonContent(serializeJob(done));
       }
-      return toJsonContent({ jobId: job.id, status: job.status });
+      const summary = { jobId: job.id, status: job.status };
+      if (job.downloadUrl) summary.downloadUrl = job.downloadUrl;
+      if (job.signedUrl) summary.signedUrl = job.signedUrl;
+      return toJsonContent(summary);
     } catch (err) {
       const details = err && err.name === "AbortError" ? "Request timed out (3 min)." : String(err.message || err);
       return errorContent(details);
@@ -415,7 +490,7 @@ async function processMedcastJob(jobId, { filePaths, sourceText, ndcRaw, outputD
     let signedUrl = null;
 
     if (storage && OUTPUT_BUCKET) {
-      const objectName = `${OUTPUT_OBJECT_PREFIX}/${jobId}/output-${nowTimestamp()}.wav`;
+      const objectName = `${OUTPUT_OBJECT_PREFIX}/${jobId}/output-${nowIso()}.wav`;
       const bucket = storage.bucket(OUTPUT_BUCKET);
       const file = bucket.file(objectName);
       await file.save(buffer, { contentType: "audio/wav" });
@@ -434,8 +509,8 @@ async function processMedcastJob(jobId, { filePaths, sourceText, ndcRaw, outputD
       downloadUrl = resolveDownloadUrl(jobId, downloadUrl || signed);
     } else {
       const resolvedOutputDir = outputDir ? path.resolve(process.cwd(), outputDir) : path.resolve(process.cwd(), path.join("mcp_outputs", "medcast"));
-      await ensureDirectory(resolvedOutputDir);
-      outPath = path.join(resolvedOutputDir, `output-${nowTimestamp()}.wav`);
+      await fs.mkdir(resolvedOutputDir, { recursive: true });
+      outPath = path.join(resolvedOutputDir, `output-${nowIso()}.wav`);
       await fs.writeFile(outPath, buffer);
       downloadUrl = resolveDownloadUrl(jobId, null);
     }
@@ -469,16 +544,16 @@ async function waitForJob(jobId, waitMs) {
 
 tools.set("pill_identifier", {
   name: "pill_identifier",
-  description: "Analyze a medication image against expected medication details (name + 11-digit NDC).",
+  description: "Identify a pill image against expected medication (name + 11-digit NDC). Provide an HTTPS image URL accessible over the public internet.",
   inputSchema: {
     type: "object",
     properties: {
       name: { type: "string", description: "Medication name" },
       ndc11: { type: "string", description: "Exactly 11 digits (hyphens removed automatically)" },
-      imagePath: { type: "string", description: "Local path to medication image (jpg, png, gif, webp). <=5MB" },
+      imageUrl: { type: "string", description: "HTTPS URL to image (jpg, png, gif, webp). <=5MB" },
       description: { type: "string", description: "Optional physical description" }
     },
-    required: ["name", "ndc11", "imagePath"]
+    required: ["name", "ndc11", "imageUrl"]
   },
   async invoke(input) {
     try {
@@ -489,16 +564,22 @@ tools.set("pill_identifier", {
       if (!normalizedNdc) return errorContent("Missing 'ndc11'.");
       if (normalizedNdc.length !== 11) return errorContent("NDC must contain exactly 11 digits.");
 
-      const imagePath = String(input.imagePath || "").trim();
-      if (!imagePath) return errorContent("Missing 'imagePath'.");
-      const stats = await fs.stat(path.resolve(imagePath));
-      if (stats.size > 5 * 1024 * 1024) return errorContent("Image is too large. Max size is 5MB.");
+      const imageUrl = String(input.imageUrl || "").trim();
+      if (!imageUrl) return errorContent("Provide imageUrl. Only publicly accessible HTTPS URLs are supported.");
+      try {
+        const parsed = new URL(imageUrl);
+        if (parsed.protocol !== "https:") return errorContent("imageUrl must be HTTPS.");
+      } catch (e) {
+        return errorContent("imageUrl must be a valid URL.");
+      }
 
-      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-      const fileObj = await readFileAsFileObject(imagePath);
+      const fileObj = await fileFromUrl(imageUrl);
+
       const mimeType = fileObj.type || mime.lookup(fileObj.name) || "application/octet-stream";
-      if (!allowedTypes.includes(mimeType)) {
-        return errorContent("Unsupported image format. Use JPG, PNG, GIF, or WebP.");
+      try {
+        ensureAllowedImageType(mimeType);
+      } catch (e) {
+        return errorContent(e?.message || String(e));
       }
 
       const formData = new FormData();
@@ -548,7 +629,15 @@ tools.set("medcast_job_status", {
 
     const requestedWait = Number.isFinite(input.waitMs) ? Number(input.waitMs) : 0;
     const canWait = job.status === "pending" || job.status === "running";
-    const effectiveWait = canWait ? Math.max(requestedWait, AUTO_WAIT_MS) : 0;
+    let baseWait = Math.max(requestedWait, AUTO_WAIT_MS);
+    if (HTTP_MODE && !HTTP_INLINE_WAIT_ENABLED) {
+      // job_status is still allowed to wait, but we honour clamp + flag only when baseWait>0
+      baseWait = AUTO_WAIT_MS > 0 ? AUTO_WAIT_MS : requestedWait;
+    }
+    const effectiveWait = canWait ? clampWaitDuration(baseWait) : 0;
+    if (canWait && effectiveWait > 0) {
+      maybeLogWaitClamp("medcast_job_status", baseWait, effectiveWait);
+    }
     if (effectiveWait > 0 && canWait) {
       const after = await waitForJob(jobId, effectiveWait);
       if (FORCE_DL_ONLY && after && after.status === "succeeded") {
@@ -598,7 +687,7 @@ async function startHttpIfRequested() {
   if (process.env.MCP_HTTP !== "1") return;
   const port = process.env.MCP_PORT ? parseInt(process.env.MCP_PORT, 10) : 3333;
   const app = express();
-  app.use(express.json({ limit: "4mb" }));
+  app.use(express.json({ limit: "16mb" }));
   const allowedOriginsEnv = process.env.MCP_ALLOWED_ORIGINS || "";
   const allowedOrigins = allowedOriginsEnv
     .split(",")

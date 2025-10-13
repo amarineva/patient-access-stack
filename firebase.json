@@ -18,6 +18,34 @@
           "serviceId": "scriptability-mcp",
           "region": "us-central1"
         }
+      },
+      {
+        "source": "/mcp/**",
+        "run": {
+          "serviceId": "scriptability-mcp",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/upload/image",
+        "run": {
+          "serviceId": "scriptability-mcp",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/upload/image/multipart",
+        "run": {
+          "serviceId": "scriptability-mcp",
+          "region": "us-central1"
+        }
+      },
+      {
+        "source": "/files/medcast/**",
+        "run": {
+          "serviceId": "scriptability-mcp",
+          "region": "us-central1"
+        }
       }
     ],
     "headers": [

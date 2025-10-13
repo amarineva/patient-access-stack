@@ -33,16 +33,20 @@
             hint: 'Normalizes pharmacy SIG instructions into structured JSON'
         },
         'ndc_analysis': {
-            args: {"ndc": "00527-1312-01"},
+            args: {"ndc": "00228305911"},
             hint: 'Looks up pharmaceutical data for an NDC code (digits and hyphens allowed)'
         },
         'medcast_generate_podcast': {
             args: {"text": "Important medication information", "ndc": "65862-523-01"},
             hint: 'Generates audio podcast. Note: Requires file paths for files parameter'
         },
+        'medcast_job_status': {
+            args: {"jobId": "<paste job id>", "waitMs": 3000},
+            hint: 'Check ongoing Medcast job status. Use short waitMs (e.g., 3000) to avoid HTTP timeouts.'
+        },
         'pill_identifier': {
-            args: {"name": "Lisinopril", "ndc11": "00527131201", "imagePath": "/path/to/image.jpg"},
-            hint: 'Analyzes medication image. Note: imagePath must be accessible to MCP server'
+            args: {"name": "AMOXICILLIN 500 MG TABLET", "ndc11": "65862001401", "imageUrl": "https://www.drugs.com/images/pills/fio/AUR00140/amoxicillin-trihydrate.JPG"},
+            hint: 'Analyzes medication image. Note: imageUrl must be a publicly accessible HTTPS URL'
         }
     };
 
