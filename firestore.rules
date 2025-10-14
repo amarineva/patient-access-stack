@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Functions have admin access; rules don't apply to backend by default.
+    // For emulator sanity we allow reads from local Hosting if needed.
+    match /{document=**} {
+      allow read, write: if false; // No client access
+    }
+  }
+}

@@ -9,6 +9,12 @@
         lastMcpEndpoint: 'sandbox.mcp.endpoint'
     };
 
+    // Firebase Cloud Function endpoints for MCP state management
+    const MCP_STATE_ENDPOINTS = {
+        getState: '/getMcpState',
+        toggleState: '/toggleMcpState'
+    };
+
     const DEFAULT_SIG_MODEL = 'gpt-4.1-mini';
     const PROMPT_ID = 'pmpt_68d1aac7137081978a62cfad87ffd3730b5be593908223a0';
     const PROMPT_VERSION = '7';
@@ -257,7 +263,8 @@
     const mcpState = {
         endpoint: '',
         protocolVersion: MCP_PROTOCOL_VERSION,
-        connected: false
+        connected: false,
+        serverEnabled: null // null = unknown, true = enabled, false = disabled
     };
 
     function setMcpStatus(status) {
@@ -295,6 +302,95 @@
             if (toolSelect) toolSelect.disabled = true;
             if (argsTextarea) argsTextarea.disabled = true;
             if (callBtn) callBtn.disabled = true;
+        }
+    }
+
+    function setMcpServerStatus(enabled) {
+        const badge = getEl('mcpServerStatusBadge');
+        if (badge) {
+            const status = enabled === null ? 'unknown' : (enabled ? 'enabled' : 'disabled');
+            badge.setAttribute('data-status', status);
+            const labels = {
+                'unknown': 'Unknown',
+                'enabled': 'Enabled',
+                'disabled': 'Disabled'
+            };
+            badge.textContent = labels[status] || status;
+        }
+        mcpState.serverEnabled = enabled;
+    }
+
+    async function getMcpServerState() {
+        try {
+            const res = await fetch(MCP_STATE_ENDPOINTS.getState, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+            }
+
+            const data = await res.json();
+            setMcpServerStatus(data.enabled);
+            return data;
+        } catch (err) {
+            console.error('Failed to get MCP server state:', err);
+            setMcpServerStatus(null);
+            showToast('Failed to get server state', 'error');
+            return null;
+        }
+    }
+
+    async function toggleMcpServerState() {
+        const currentState = mcpState.serverEnabled;
+        if (currentState === null) {
+            showToast('Server state unknown. Please refresh and try again.', 'error');
+            return;
+        }
+
+        const newState = !currentState;
+        const toggleBtn = getEl('mcpServerToggleBtn');
+        
+        try {
+            let originalHtml;
+            if (toggleBtn) {
+                toggleBtn.disabled = true;
+                originalHtml = toggleBtn.innerHTML;
+                toggleBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Toggling...';
+            }
+
+            const res = await fetch(MCP_STATE_ENDPOINTS.toggleState, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ enabled: newState })
+            });
+
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+            }
+
+            const data = await res.json();
+            setMcpServerStatus(newState);
+            showToast(data.message || `Server ${newState ? 'enabled' : 'disabled'}`, 'success');
+            
+            // If server was disabled and we're connected, disconnect
+            if (!newState && mcpState.connected) {
+                mcpDisconnect();
+            }
+            
+        } catch (err) {
+            console.error('Failed to toggle MCP server state:', err);
+            showToast('Failed to toggle server state', 'error');
+        } finally {
+            if (toggleBtn) {
+                toggleBtn.disabled = false;
+                toggleBtn.innerHTML = '<i class="fas fa-power-off"></i> Toggle Server';
+            }
         }
     }
 
@@ -436,7 +532,7 @@
             panel.style.display = 'none';
             updateProductVisibility();
         } else {
-            // Opening MCP panel - hide all products
+            // Opening MCP panel - hide all products and load server state
             panel.style.display = 'grid';
             document.querySelectorAll('.sandbox-grid').forEach(section => {
                 const product = section.getAttribute('data-product');
@@ -444,6 +540,8 @@
                     section.style.display = 'none';
                 }
             });
+            // Load MCP server state when panel opens
+            getMcpServerState();
         }
     }
 
@@ -454,6 +552,12 @@
             return;
         }
         if (warnIfMixedContent(endpoint)) return;
+
+        // Check if MCP server is enabled before attempting connection
+        if (mcpState.serverEnabled === false) {
+            showToast('MCP server is currently disabled. Please enable it first.', 'error');
+            return;
+        }
 
         const out = getEl('outputMcp');
         const btn = getEl('mcpConnectBtn');
@@ -1034,6 +1138,10 @@
             const text = (getEl('outputMcp').textContent || '');
             navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard', 'success'));
         });
+        
+        // MCP Server state management
+        const mcpServerToggleBtn = getEl('mcpServerToggleBtn');
+        if (mcpServerToggleBtn) mcpServerToggleBtn.addEventListener('click', toggleMcpServerState);
     }
 
     function updateActiveProductLabel() {

@@ -1374,6 +1374,21 @@ textarea:focus {
     color: #065f46;
 }
 
+.mcp-status-badge[data-status="enabled"] {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.mcp-status-badge[data-status="disabled"] {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.mcp-status-badge[data-status="unknown"] {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }

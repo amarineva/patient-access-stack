@@ -205,9 +205,18 @@
                         <div class="sandbox-grid mcp-panel" id="mcpPanel" style="display:none">
                             <div class="sandbox-runner">
                                 <div class="mcp-status-display" style="margin-bottom: 1.5rem;">
-                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
                                         <strong>Connection Status:</strong>
                                         <span id="mcpStatusBadge" class="mcp-status-badge" data-status="disconnected">Disconnected</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <strong>Server Status:</strong>
+                                        <span id="mcpServerStatusBadge" class="mcp-status-badge" data-status="unknown">Unknown</span>
+                                    </div>
+                                    <div>
+                                        <button id="mcpServerToggleBtn" class="btn btn-secondary" type="button" style="margin-top: 8px;">
+                                            <i class="fas fa-power-off"></i> Toggle Server
+                                        </button>
                                     </div>
                                 </div>
 

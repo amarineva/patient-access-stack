@@ -14,17 +14,19 @@
     "rewrites": [
       {
         "source": "/mcp",
-        "run": {
-          "serviceId": "scriptability-mcp",
-          "region": "us-central1"
-        }
+        "function": "mcpProxy"
       },
       {
         "source": "/mcp/**",
-        "run": {
-          "serviceId": "scriptability-mcp",
-          "region": "us-central1"
-        }
+        "function": "mcpProxy"
+      },
+      {
+        "source": "/getMcpState",
+        "function": "getMcpState"
+      },
+      {
+        "source": "/toggleMcpState",
+        "function": "toggleMcpState"
       },
       {
         "source": "/upload/image",
@@ -68,5 +70,23 @@
         ]
       }
     ]
+  }
+  ,
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "emulators": {
+    "functions": {
+      "port": 5001
+    },
+    "hosting": {
+      "port": 5000
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": true
+    }
   }
 }
