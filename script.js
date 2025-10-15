@@ -67,6 +67,20 @@ document.addEventListener('DOMContentLoaded', function() {
             const appCard = this.closest('.app-card');
             const appName = appCard.querySelector('.app-name').textContent.trim();
             const productKey = PRODUCT_MAP[appName.toLowerCase()];
+            const launchUrl = appCard.getAttribute('data-launch-url');
+
+            if (launchUrl) {
+                // External launch URL takes precedence for this card
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                this.disabled = true;
+                setTimeout(() => {
+                    window.open(launchUrl, '_blank', 'noopener');
+                    this.innerHTML = '<i class="fas fa-play"></i>';
+                    this.disabled = false;
+                }, 600);
+                return;
+            }
+
             launchApp(productKey, appName, this);
         });
     });
@@ -77,7 +91,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const appName = this.querySelector('.app-name').textContent;
             const appDescription = this.querySelector('.app-description').textContent;
             const productKey = PRODUCT_MAP[appName.toLowerCase()];
-            showAppDetails(appName, appDescription, productKey);
+            const launchUrl = this.getAttribute('data-launch-url');
+            showAppDetails(appName, appDescription, productKey, launchUrl);
         });
     });
     
@@ -300,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Show app details modal
-function showAppDetails(appName, description, productKey) {
+function showAppDetails(appName, description, productKey, launchUrl) {
     const modal = document.createElement('div');
     modal.className = 'app-modal';
     modal.innerHTML = `
@@ -361,7 +376,13 @@ function showAppDetails(appName, description, productKey) {
     overlay.addEventListener('click', closeModal);
     
     const launchBtn = modal.querySelector('.launch-app');
-    if (productKey) {
+    if (launchUrl) {
+        launchBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeModal();
+            window.open(launchUrl, '_blank', 'noopener');
+        });
+    } else if (productKey) {
         launchBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             closeModal();

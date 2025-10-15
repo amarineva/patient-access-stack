@@ -24,7 +24,8 @@ exports.normalizeSig = onRequest(
       'http://localhost:5000', // Firebase Hosting emulator
       'http://127.0.0.1:5000', // Firebase Hosting emulator
       'http://localhost:8080', // Lightweight local testing server
-      'http://127.0.0.1:8080'  // Lightweight local testing server
+      'http://127.0.0.1:8080',  // Lightweight local testing server
+      'https://rxco.de' // RxCode domain
     ];
     
     const origin = req.headers.origin;
@@ -115,7 +116,8 @@ exports.getMcpState = onRequest(async (req, res) => {
     'http://localhost:5000', // Firebase Hosting emulator
     'http://127.0.0.1:5000', // Firebase Hosting emulator
     'http://localhost:8080', // Lightweight local testing server
-    'http://127.0.0.1:8080'  // Lightweight local testing server
+    'http://127.0.0.1:8080',  // Lightweight local testing server
+    'https://rxco.de' // RxCode domain
   ];
   
   const origin = req.headers.origin || '';
@@ -186,7 +188,8 @@ exports.toggleMcpState = onRequest(async (req, res) => {
     'http://localhost:5000', // Firebase Hosting emulator
     'http://127.0.0.1:5000', // Firebase Hosting emulator
     'http://localhost:8080', // Lightweight local testing server
-    'http://127.0.0.1:8080'  // Lightweight local testing server
+    'http://127.0.0.1:8080',  // Lightweight local testing server
+    'https://rxco.de' // RxCode domain
   ];
   
   const origin = req.headers.origin || '';
@@ -262,7 +265,8 @@ exports.mcpProxy = onRequest(async (req, res) => {
     'http://localhost:5000', // Firebase Hosting emulator
     'http://127.0.0.1:5000', // Firebase Hosting emulator
     'http://localhost:8080', // Lightweight local testing server
-    'http://127.0.0.1:8080'  // Lightweight local testing server
+    'http://127.0.0.1:8080',  // Lightweight local testing server
+    'https://rxco.de' // RxCode domain
   ];
   
   const origin = req.headers.origin || '';
