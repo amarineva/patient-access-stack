@@ -69,6 +69,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const productKey = PRODUCT_MAP[appName.toLowerCase()];
             const launchUrl = appCard.getAttribute('data-launch-url');
 
+            // Special handling for RxCode: show QR modal instead of navigating
+            if (appName.toLowerCase() === 'rxcode') {
+                showQrModal();
+                return;
+            }
+
             if (launchUrl) {
                 // External launch URL takes precedence for this card
                 this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -92,7 +98,23 @@ document.addEventListener('DOMContentLoaded', function() {
             const appDescription = this.querySelector('.app-description').textContent;
             const productKey = PRODUCT_MAP[appName.toLowerCase()];
             const launchUrl = this.getAttribute('data-launch-url');
+
+            // For RxCode, open QR modal directly instead of details/redirect
+            if (appName.toLowerCase() === 'rxcode') {
+                showQrModal();
+                return;
+            }
+
             showAppDetails(appName, appDescription, productKey, launchUrl);
+        });
+    });
+
+    // Intercept shelf tile linking to rxco.de to show QR instead of navigating
+    const rxShelfLinks = document.querySelectorAll('a[href="https://rxco.de"]');
+    rxShelfLinks.forEach(a => {
+        a.addEventListener('click', function(e) {
+            e.preventDefault();
+            showQrModal();
         });
     });
     
@@ -403,6 +425,72 @@ function showAppDetails(appName, description, productKey, launchUrl) {
             }
         }, 300);
     }
+}
+
+// Show QR modal for RxCode
+function showQrModal() {
+    const modal = document.createElement('div');
+    modal.className = 'qr-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>RxCode</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body" style="text-align:center">
+                    <img src="assets/scriptview_flip_qr.png" alt="ScriptView Flip QR Code" style="max-width:280px; width:80%; height:auto; border-radius:8px; box-shadow:0 6px 16px rgba(0,0,0,0.12)"/>
+                    <div style="margin-top:12px; color:#374151; font-weight:600">Scan with your ScriptView Mobile App!</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 10000;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    `;
+
+    const modalContent = modal.querySelector('.modal-content');
+    modalContent.style.cssText = `
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        max-width: 420px;
+        width: 100%;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        transform: scale(0.9);
+        transition: transform 0.3s ease;
+    `;
+
+    document.body.appendChild(modal);
+    setTimeout(() => { modalContent.style.transform = 'scale(1)'; }, 100);
+
+    // Graceful fallback if local asset is missing
+    const qrImg = modal.querySelector('img');
+    if (qrImg) {
+        qrImg.addEventListener('error', () => {
+            qrImg.src = 'https://chart.googleapis.com/chart?cht=qr&chs=300x300&choe=UTF-8&chl=' + encodeURIComponent('https://rxco.de');
+        }, { once: true });
+    }
+
+    const closeBtn = modal.querySelector('.modal-close');
+    const overlay = modal.querySelector('.modal-overlay');
+    function closeModal() {
+        modalContent.style.transform = 'scale(0.9)';
+        setTimeout(() => { if (modal.parentNode) modal.parentNode.removeChild(modal); }, 300);
+    }
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', closeModal);
 }
 
 // Show search modal
@@ -864,7 +952,7 @@ function htmlToElement(htmlString) {
 // Keyboard navigation support
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
-        const modals = document.querySelectorAll('.app-modal, .search-modal, .menu-modal');
+        const modals = document.querySelectorAll('.app-modal, .search-modal, .menu-modal, .qr-modal');
         modals.forEach(modal => {
             if (modal.parentNode) {
                 modal.parentNode.removeChild(modal);
